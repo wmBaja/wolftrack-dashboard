@@ -70,3 +70,10 @@ npm run test:e2e -- --debug
 ```sh
 npm run lint
 ```
+### Building Electron app
+
+```sh
+npm run electron:build
+```
+Electron app is built for the platform you are building on. To build for other platforms, see [Electron Builder - Multi Platform Build](https://www.electron.build/multi-platform-build).
+Run the installer located in `dist_electron` folder.
