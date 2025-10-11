@@ -14,8 +14,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      // Uncomment if you need to use preload script
-      preload: path.join('/electron/preload.js')
+      // Use __dirname so the preload path is absolute both in dev and when packaged.
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
@@ -29,7 +29,6 @@ function createWindow() {
       ? path.join(process.resourcesPath, 'dist', 'index.html')
       : path.join(__dirname, '../dist/index.html');
     win.loadFile(indexPath);
-    win.webContents.openDevTools();
   }
 }
 
