@@ -1,0 +1,14 @@
+<script setup lang="ts">
+</script>
+
+<template>
+  <nav class="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
+    <div class="mx-auto px-4">
+      <div class="flex items-center justify-between h-14">
+
+        <img src="@/assets/images/bajaLogo-dark.png" alt="Pack Motorsports Baja SAE Logo" class="min-w h-full py-1" />
+
+      </div>
+    </div>
+  </nav>
+</template>
