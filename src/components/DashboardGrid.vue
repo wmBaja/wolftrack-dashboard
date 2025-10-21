@@ -1,51 +1,144 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, computed } from 'vue'
 import { GridLayout } from 'grid-layout-plus'
+import { useWidgetStore } from '@/stores/widgetStore'
+import BaseWidget from '@/components/BaseWidget.vue'
+import { WIDGET_TYPES, type WidgetLayout } from '@/types/widgets'
 
-// Define grid layout - array of widget positions
-const layout = ref([
-  { x: 0, y: 0, w: 3, h: 4, i: '0' },  // Widget 1: top-left, 3 cols wide, 4 rows tall
-  { x: 3, y: 0, w: 3, h: 4, i: '1' },  // Widget 2: top-middle
-  { x: 6, y: 0, w: 6, h: 4, i: '2' },  // Widget 3: top-right, wider
-  { x: 0, y: 4, w: 12, h: 6, i: '3' }, // Widget 4: full width below
-])
+const widgetStore = useWidgetStore()
+
+// Load saved widgets on mount
+onMounted(() => {
+  widgetStore.loadFromLocalStorage()
+})
+
+// Create a computed layout that the grid can read
+const layout = computed({
+  get: () => widgetStore.layout,
+  set: (newLayout: WidgetLayout[]) => {
+    // Update store when grid changes layout
+    widgetStore.updateLayout(newLayout)
+  }
+})
+
+// Get component for widget type
+function getWidgetComponent(type: string) {
+  const components: Record<string, unknown> = {
+    base: BaseWidget
+  }
+  return components[type] || BaseWidget
+}
 </script>
 
 <template>
-  <div class="p-4">
-    <GridLayout
-      v-model:layout="layout"
-      :col-num="12"
-      :row-height="30"
-      :is-draggable="true"
-      :is-resizable="true"
-      :is-bounded="true"
-      :responsive="true"
-      :margin="[5, 5]"
-      :use-css-transforms="true"
-    >
-      <!-- Widget 0 -->
-      <template #item="{ item }">
-        <div class="bg-[var(--color-panel)] border border-[var(--color-border)] rounded-lg p-4">
-          <h3 class="text-sm font-semibold mb-2">Widget {{ item.i }}</h3>
-          <p class="text-xs text-[var(--color-muted)]">{{ item.w }}x{{ item.h }}</p>
-        </div>
-      </template>
-    </GridLayout>
+  <div class="dashboard-grid-container">
+    <!-- Toolbar -->
+    <div class="dashboard-toolbar">
+      <h2 class="text-lg font-semibold">Dashboard</h2>
+      <div class="flex gap-2">
+        <button
+          @click="widgetStore.addWidget(WIDGET_TYPES.BASE, { x: 0, y: 0 })"
+          class="toolbar-btn"
+        >
+          + Base
+        </button>
+      </div>
+    </div>
+
+    <!-- Grid -->
+    <div class="grid-wrapper">
+      <GridLayout
+        v-model:layout="layout"
+        :col-num="12"
+        :row-height="30"
+        :is-draggable="true"
+        :is-resizable="true"
+        :is-bounded="true"
+        :responsive="true"
+        :margin="[10, 10]"
+        :use-css-transforms="true"
+      >
+        <template #item="{ item }">
+          <component
+            :is="getWidgetComponent(widgetStore.getWidgetById(item.i)?.type || 'base')"
+            :widget-id="item.i"
+          />
+        </template>
+      </GridLayout>
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* Override grid-layout-plus default styles if needed */
+.dashboard-grid-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 16px;
+  padding: 20px;
+}
+
+.dashboard-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.toolbar-btn {
+  padding: 8px 16px;
+  background: var(--color-accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toolbar-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.grid-wrapper {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* Grid item styles */
 :deep(.vue-grid-item) {
   transition: all 200ms ease;
+  pointer-events: auto;
 }
 
 :deep(.vue-grid-item.resizing) {
   opacity: 0.9;
+  z-index: 100;
 }
 
-:deep(.vue-grid-item.static) {
-  background: transparent;
+:deep(.vue-grid-item.dragging) {
+  z-index: 100;
+  opacity: 0.8;
+}
+
+/* Placeholder styling */
+:deep(.vue-grid-placeholder) {
+  background: rgba(59, 130, 246, 0.2) !important;
+  border: 2px dashed var(--color-accent) !important;
+  border-radius: 8px;
+  transition: all 200ms ease;
+  z-index: 1 !important;
+  pointer-events: none !important;
+}
+
+/* Ensure placeholder is properly hidden */
+:deep(.vue-grid-item:not(.vue-grid-placeholder)) {
+  z-index: 2;
 }
 </style>
