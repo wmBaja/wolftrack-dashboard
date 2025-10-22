@@ -60,7 +60,7 @@ function getWidgetComponent(type: string) {
       >
         <template #item="{ item }">
           <component
-            :is="getWidgetComponent(widgetStore.getWidgetById(item.i)?.type || 'base')"
+            :is="getWidgetComponent(widgetStore.getWidgetById(item.i.toString())?.type || 'base')"
             :widget-id="item.i"
           />
         </template>
