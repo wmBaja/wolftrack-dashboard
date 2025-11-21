@@ -1,11 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { createWidget, WIDGET_TYPES, type Widget, type WidgetLayout, type WidgetPosition, type WidgetConfig } from '@/types/widgets'
+import { createWidget, WIDGET_TYPES, type Widget, type WidgetPosition, type WidgetConfig } from '@/types/widgets'
 
 export const useWidgetStore = defineStore('widgets', () => {
-  // State
+  // State - Only ONE source of truth
   const widgets = ref<Widget[]>([])
-  const layout = ref<WidgetLayout[]>([])
 
   // Getters
   const getWidgetById = computed(() => {
@@ -20,7 +19,6 @@ export const useWidgetStore = defineStore('widgets', () => {
   function addWidget(type: WIDGET_TYPES, position: WidgetPosition): Widget {
     const newWidget = createWidget(type, position)
     widgets.value.push(newWidget)
-    syncLayout()
     saveToLocalStorage()
     return newWidget
   }
@@ -29,7 +27,6 @@ export const useWidgetStore = defineStore('widgets', () => {
     const index = widgets.value.findIndex(w => w.i === id)
     if (index !== -1) {
       widgets.value.splice(index, 1)
-      syncLayout()
       saveToLocalStorage()
     }
   }
@@ -38,7 +35,6 @@ export const useWidgetStore = defineStore('widgets', () => {
     const widget = widgets.value.find(w => w.i === id)
     if (widget) {
       Object.assign(widget, updates)
-      syncLayout()
       saveToLocalStorage()
     }
   }
@@ -51,8 +47,8 @@ export const useWidgetStore = defineStore('widgets', () => {
     }
   }
 
-  function updateLayout(newLayout: WidgetLayout[]): void {
-    // Called by GridLayout when items are moved/resized
+  function updateLayout(newLayout: Widget[]): void {
+    // GridLayout directly updates widgets array positions
     newLayout.forEach(item => {
       const widget = widgets.value.find(w => w.i === item.i)
       if (widget) {
@@ -62,24 +58,7 @@ export const useWidgetStore = defineStore('widgets', () => {
         widget.h = item.h
       }
     })
-    syncLayout()
     saveToLocalStorage()
-  }
-
-  function syncLayout(): void {
-    // Sync the layout array that GridLayout expects
-    layout.value = widgets.value.map(w => ({
-      i: w.i,
-      x: w.x,
-      y: w.y,
-      w: w.w,
-      h: w.h,
-      minW: w.minW,
-      minH: w.minH,
-      maxW: w.maxW,
-      maxH: w.maxH,
-      static: w.static,
-    }))
   }
 
   function saveToLocalStorage(): void {
@@ -96,32 +75,20 @@ export const useWidgetStore = defineStore('widgets', () => {
       if (saved) {
         const parsed = JSON.parse(saved) as Widget[]
         widgets.value = parsed
-        syncLayout()
-      } else {
-        // Initialize with default widgets
-        initializeDefaultWidgets()
       }
     } catch (error) {
       console.error('Failed to load widgets:', error)
-      initializeDefaultWidgets()
     }
-  }
-
-  function initializeDefaultWidgets(): void {
-    // Add some default widgets
-    addWidget(WIDGET_TYPES.CHART, { x: 4, y: 0 })
   }
 
   function clearAll(): void {
     widgets.value = []
-    layout.value = []
     saveToLocalStorage()
   }
 
   return {
     // State
     widgets,
-    layout,
 
     // Getters
     getWidgetById,

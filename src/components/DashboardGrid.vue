@@ -3,49 +3,45 @@ import { onMounted, computed } from 'vue'
 import { GridLayout } from 'grid-layout-plus'
 import { useWidgetStore } from '@/stores/widgetStore'
 import BaseWidget from '@/components/BaseWidget.vue'
-import { WIDGET_TYPES, type WidgetLayout } from '@/types/widgets'
+import { WIDGET_TYPES, type Widget } from '@/types/widgets'
 
 const widgetStore = useWidgetStore()
 
-// Load saved widgets on mount
 onMounted(() => {
   widgetStore.loadFromLocalStorage()
 })
 
-// Create a computed layout that the grid can read
+// GridLayout works directly with widgets array
 const layout = computed({
-  get: () => widgetStore.layout,
-  set: (newLayout: WidgetLayout[]) => {
-    // Update store when grid changes layout
+  get: () => widgetStore.widgets,
+  set: (newLayout: Widget[]) => {
     widgetStore.updateLayout(newLayout)
   }
 })
 
-// Get component for widget type
 function getWidgetComponent(type: string) {
   const components: Record<string, unknown> = {
     base: BaseWidget
   }
   return components[type] || BaseWidget
 }
+
+function handleAddWidget() {
+  widgetStore.addWidget(WIDGET_TYPES.BASE, { x: 0, y: 0 } )
+}
 </script>
 
 <template>
   <div class="dashboard-grid-container">
-    <!-- Toolbar -->
     <div class="dashboard-toolbar">
       <h2 class="text-lg font-semibold">Dashboard</h2>
       <div class="flex gap-2">
-        <button
-          @click="widgetStore.addWidget(WIDGET_TYPES.BASE, { x: 0, y: 0 })"
-          class="toolbar-btn"
-        >
+        <button @click="handleAddWidget" class="toolbar-btn">
           + Base
         </button>
       </div>
     </div>
 
-    <!-- Grid -->
     <div class="grid-wrapper">
       <GridLayout
         v-model:layout="layout"
@@ -57,10 +53,12 @@ function getWidgetComponent(type: string) {
         :responsive="true"
         :margin="[10, 10]"
         :use-css-transforms="true"
+        :vertical-compact="false"
+        :prevent-collision="true"
       >
         <template #item="{ item }">
           <component
-            :is="getWidgetComponent(widgetStore.getWidgetById(item.i.toString())?.type || 'base')"
+            :is="getWidgetComponent(widgetStore.getWidgetById(item.i)?.type || 'base')"
             :widget-id="item.i"
           />
         </template>
@@ -111,7 +109,6 @@ function getWidgetComponent(type: string) {
   min-height: 0;
 }
 
-/* Grid item styles */
 :deep(.vue-grid-item) {
   transition: all 200ms ease;
   pointer-events: auto;
@@ -127,7 +124,6 @@ function getWidgetComponent(type: string) {
   opacity: 0.8;
 }
 
-/* Placeholder styling */
 :deep(.vue-grid-placeholder) {
   background: rgba(59, 130, 246, 0.2) !important;
   border: 2px dashed var(--color-accent) !important;
@@ -137,7 +133,6 @@ function getWidgetComponent(type: string) {
   pointer-events: none !important;
 }
 
-/* Ensure placeholder is properly hidden */
 :deep(.vue-grid-item:not(.vue-grid-placeholder)) {
   z-index: 2;
 }
