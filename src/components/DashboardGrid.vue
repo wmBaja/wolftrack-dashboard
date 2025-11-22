@@ -147,7 +147,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 .dashboard-grid-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--navbar-height, 60px));
+  height: calc(100vh - var(--navbar-height));
   padding: 5px;
 }
 

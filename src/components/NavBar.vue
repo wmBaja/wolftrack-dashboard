@@ -2,7 +2,7 @@
 </script>
 
 <template>
-  <nav class="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
+  <nav class="bg-[var(--color-panel)] border-b border-[var(--color-border)] h-[var(--navbar-height)]">
     <div class="mx-auto px-4">
       <div class="flex items-center justify-between h-14">
 

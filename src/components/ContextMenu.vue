@@ -97,17 +97,6 @@ function handleItemClick(item: ContextMenuItem) {
   animation: fadeIn 0.1s ease-out;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 .context-menu-item {
   display: flex;
   align-items: center;
@@ -129,7 +118,7 @@ function handleItemClick(item: ContextMenuItem) {
 }
 
 .context-menu-item.danger {
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .context-menu-item.danger:hover:not(.disabled) {
