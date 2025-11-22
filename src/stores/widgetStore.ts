@@ -1,22 +1,20 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { createWidget, WIDGET_TYPES, type Widget, type WidgetPosition, type WidgetConfig } from '@/types/widgets'
+import { createWidget, WIDGET_TYPES, type Widget } from '@/types/widgets'
 
 export const useWidgetStore = defineStore('widgets', () => {
   // State - Only ONE source of truth
   const widgets = ref<Widget[]>([])
 
   // Getters
-  const getWidgetById = computed(() => {
-    return (id: string): Widget | undefined => {
-      return widgets.value.find(w => w.i === id)
-    }
-  })
+  function getWidgetById(id: string): Widget | undefined {
+    return widgets.value.find(w => w.i === id)
+  }
 
   const widgetCount = computed(() => widgets.value.length)
 
   // Actions
-  function addWidget(type: WIDGET_TYPES, position: WidgetPosition): Widget {
+  function addWidget(type: WIDGET_TYPES, position: {x: number, y: number, w?: number, h?: number}): Widget {
     const newWidget = createWidget(type, position)
     widgets.value.push(newWidget)
     saveToLocalStorage()
@@ -39,16 +37,8 @@ export const useWidgetStore = defineStore('widgets', () => {
     }
   }
 
-  function updateWidgetConfig(id: string, configUpdates: Partial<WidgetConfig>): void {
-    const widget = widgets.value.find(w => w.i === id)
-    if (widget) {
-      widget.config = { ...widget.config, ...configUpdates }
-      saveToLocalStorage()
-    }
-  }
-
   function updateLayout(newLayout: Widget[]): void {
-    // GridLayout directly updates widgets array positions
+    // GridLayout passes back updated layout with new positions
     newLayout.forEach(item => {
       const widget = widgets.value.find(w => w.i === item.i)
       if (widget) {
@@ -73,8 +63,7 @@ export const useWidgetStore = defineStore('widgets', () => {
     try {
       const saved = localStorage.getItem('dashboard-widgets')
       if (saved) {
-        const parsed = JSON.parse(saved) as Widget[]
-        widgets.value = parsed
+        widgets.value = JSON.parse(saved)
       }
     } catch (error) {
       console.error('Failed to load widgets:', error)
@@ -87,20 +76,16 @@ export const useWidgetStore = defineStore('widgets', () => {
   }
 
   return {
-    // State
     widgets,
 
-    // Getters
     getWidgetById,
     widgetCount,
 
-    // Actions
     addWidget,
     removeWidget,
     updateWidget,
-    updateWidgetConfig,
     updateLayout,
     loadFromLocalStorage,
-    clearAll,
+    clearAll
   }
 })
