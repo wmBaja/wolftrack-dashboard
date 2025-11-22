@@ -1,15 +1,28 @@
 <script setup lang="ts">
-import { onMounted, computed, ref } from 'vue'
+import { onMounted, computed, ref, type Component } from 'vue'
 import { GridLayout } from 'grid-layout-plus'
 import { useWidgetStore } from '@/stores/widgetStore'
 import { useContextMenu } from '@/composables/useContextMenu'
-import BaseWidget from '@/components/BaseWidget.vue'
+import BaseWidget from '@/components/widgets/BaseWidget.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/ContextMenu.vue'
 import { WIDGET_TYPES, type Widget } from '@/types/widgets'
+import ChartWidget from '@/components/widgets/ChartWidget.vue'
 
 const widgetStore = useWidgetStore()
 const contextMenu = useContextMenu()
-const widgetRefs = ref<Record<string, InstanceType<typeof BaseWidget>>>({})
+
+interface WidgetExpose {
+  handleRefresh: () => Promise<void>
+  startEditTitle: () => void
+  setLoading: (value: boolean) => void
+}
+
+const componentMap: Record<string, Component> = {
+  [WIDGET_TYPES.BASE]: BaseWidget,
+  [WIDGET_TYPES.CHART]: ChartWidget,
+}
+
+const widgetRefs = ref<Record<string, WidgetExpose>>({})
 
 onMounted(() => {
   widgetStore.loadFromLocalStorage()
@@ -74,6 +87,11 @@ const menuItems = computed<ContextMenuItem[]>(() => {
       icon: '➕',
       action: () => widgetStore.addWidget(WIDGET_TYPES.BASE, { x: 0, y: 0 }),
     },
+    {
+      label: 'Add Chart Widget',
+      icon: '➕',
+      action: () => widgetStore.addWidget(WIDGET_TYPES.CHART, { x: 0, y: 0 }),
+    },
     { divider: true } as ContextMenuItem,
     {
       label: 'Clear All Widgets',
@@ -104,10 +122,11 @@ const menuItems = computed<ContextMenuItem[]>(() => {
         :vertical-compact="false"
       >
         <template #item="{ item }">
-          <BaseWidget
-            :ref="el => widgetRefs[String(item.i)] = el as InstanceType<typeof BaseWidget>"
-            :widget-id="String(item.i)"
-            :data-widget-id="String(item.i)"
+          <component
+            :is="componentMap[(item as Widget).type] || BaseWidget"
+            :ref="el => widgetRefs[item.i] = el"
+            :widget-id="item.i"
+            :data-widget-id="item.i"
             @contextmenu="handleWidgetContextMenu($event, String(item.i))"
           />
         </template>

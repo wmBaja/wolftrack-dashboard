@@ -52,7 +52,12 @@ function cancelEdit() {
   isEditing.value = false
 }
 
-defineExpose({ handleRefresh, startEditTitle})
+// Add setLoading to exposed methods
+function setLoading(value: boolean) {
+  isLoading.value = value
+}
+
+defineExpose({ handleRefresh, startEditTitle, setLoading })
 </script>
 
 <template>
