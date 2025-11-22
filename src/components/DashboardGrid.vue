@@ -124,7 +124,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
         <template #item="{ item }">
           <component
             :is="componentMap[(item as Widget).type] || BaseWidget"
-            :ref="el => widgetRefs[item.i] = el"
+            :ref="(el: any) => widgetRefs[item.i] = el"
             :widget-id="item.i"
             :data-widget-id="item.i"
             @contextmenu="handleWidgetContextMenu($event, String(item.i))"
