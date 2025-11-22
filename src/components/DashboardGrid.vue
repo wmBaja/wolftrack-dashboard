@@ -5,8 +5,9 @@ import { useWidgetStore } from '@/stores/widgetStore'
 import { useContextMenu } from '@/composables/useContextMenu'
 import BaseWidget from '@/components/widgets/BaseWidget.vue'
 import ContextMenu, { type ContextMenuItem } from '@/components/ContextMenu.vue'
-import { WIDGET_TYPES, type Widget } from '@/types/widgets'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ChartWidget from '@/components/widgets/ChartWidget.vue'
+import { WIDGET_TYPES, type Widget } from '@/types/widgets'
 
 const widgetStore = useWidgetStore()
 const contextMenu = useContextMenu()
@@ -23,6 +24,7 @@ const componentMap: Record<string, Component> = {
 }
 
 const widgetRefs = ref<Record<string, WidgetExpose>>({})
+const showClearAllConfirm = ref(false)
 
 onMounted(() => {
   widgetStore.loadFromLocalStorage()
@@ -98,7 +100,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
       icon: '🗑️',
       danger: true,
       action: () => {
-        if (confirm('Clear all widgets?')) widgetStore.clearAll()
+        showClearAllConfirm.value = true
       },
     },
   ]
@@ -139,6 +141,16 @@ const menuItems = computed<ContextMenuItem[]>(() => {
       :y="contextMenu.y.value"
       :items="menuItems"
       @close="contextMenu.close"
+    />
+
+    <ConfirmDialog
+      :show="showClearAllConfirm"
+      title="Delete All Widgets"
+      message="Are you sure you want to delete all widgets?"
+      confirm-text="Delete"
+      cancel-text="Cancel"
+      @confirm="widgetStore.clearAll()"
+      @close="showClearAllConfirm = false"
     />
   </div>
 </template>
