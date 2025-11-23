@@ -23,6 +23,7 @@ const componentMap: Record<string, Component> = {
 
 const widgetRefs = ref<Record<string, WidgetExpose>>({})
 const showClearAllConfirm = ref(false)
+const gridWrapperRef = ref<HTMLElement>()
 
 onMounted(() => {
   widgetStore.loadFromLocalStorage()
@@ -47,6 +48,34 @@ function setWidgetRef(widgetId: string, el: WidgetExpose | null) {
   }
 }
 
+// Convert mouse position to grid coordinates
+function mouseToGridPosition(event: MouseEvent): { x: number; y: number } {
+  if (!gridWrapperRef.value) return { x: 0, y: 0 }
+
+  const gridRect = gridWrapperRef.value.getBoundingClientRect()
+  const rowHeight = 30 // matches :row-height prop
+  const margin = 5 // matches :margin prop
+  const colNum = 16 // matches :col-num prop
+
+  // Calculate relative position within the grid
+  const relativeX = event.clientX - gridRect.left + gridWrapperRef.value.scrollLeft
+  const relativeY = event.clientY - gridRect.top + gridWrapperRef.value.scrollTop
+
+  // Calculate column width (accounting for margins)
+  const totalMarginWidth = margin * (colNum - 1)
+  const availableWidth = gridRect.width - totalMarginWidth
+  const colWidth = availableWidth / colNum
+
+  // Convert pixel position to grid coordinates
+  const col = Math.floor(relativeX / (colWidth + margin))
+  const row = Math.floor(relativeY / (rowHeight + margin))
+
+  return {
+    x: Math.max(0, Math.min(col, colNum - 1)),
+    y: Math.max(0, row)
+  }
+}
+
 function handleGridContextMenu(event: MouseEvent) {
   const target = event.target as HTMLElement
   if (target.closest('.vue-grid-item')) {
@@ -54,6 +83,8 @@ function handleGridContextMenu(event: MouseEvent) {
   }
 
   event.preventDefault()
+
+  const gridPos = mouseToGridPosition(event)
 
   ContextMenu.showContextMenu({
     x: event.x,
@@ -64,12 +95,12 @@ function handleGridContextMenu(event: MouseEvent) {
       {
         label: 'Add Base Widget',
         icon: h('span', '➕'),
-        onClick: () => widgetStore.addWidget(WIDGET_TYPES.BASE, { x: 0, y: 0 }),
+        onClick: () => widgetStore.addWidget(WIDGET_TYPES.BASE, gridPos),
       },
       {
         label: 'Add Chart Widget',
         icon: h('span', '➕'),
-        onClick: () => widgetStore.addWidget(WIDGET_TYPES.CHART, { x: 0, y: 0 }),
+        onClick: () => widgetStore.addWidget(WIDGET_TYPES.CHART, gridPos),
       },
       { divided: true },
       {
@@ -87,7 +118,7 @@ function handleGridContextMenu(event: MouseEvent) {
 
 <template>
   <div class="dashboard-grid-container" @contextmenu="handleGridContextMenu">
-    <div class="grid-wrapper custom-scrollbar">
+    <div ref="gridWrapperRef" class="grid-wrapper custom-scrollbar">
       <GridLayout
         v-model:layout="widgetStore.widgets"
         :col-num="16"
