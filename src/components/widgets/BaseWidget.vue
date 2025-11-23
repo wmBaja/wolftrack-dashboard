@@ -1,6 +1,6 @@
 <!-- src/components/widgets/BaseWidget.vue -->
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, h} from 'vue'
 import { useWidgetStore } from '@/stores/widgetStore'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import type { MenuOptions } from '@imengyu/vue3-context-menu'
@@ -75,12 +75,12 @@ function handleContextMenu(event: MouseEvent) {
   const menuItems: MenuOptions['items'] = [
     {
       label: 'Edit Title',
-      icon: '✏️',
+      icon: h('span', '✏️'),
       onClick: startEditTitle,
     },
     {
       label: 'Refresh',
-      icon: '🔄',
+      icon: h('span', '🔄'),
       onClick: handleRefresh,
     },
   ]
@@ -95,7 +95,7 @@ function handleContextMenu(event: MouseEvent) {
   menuItems.push(
     {
       label: 'Duplicate',
-      icon: '📋',
+      icon: h('span', '📋'),
       onClick: () => {
         if (widget.value) {
           store.addWidget(widget.value.type as WIDGET_TYPES, {
@@ -108,7 +108,7 @@ function handleContextMenu(event: MouseEvent) {
     { divided: true },
     {
       label: 'Delete',
-      icon: '🗑️',
+      icon: h('span', '🗑️'),
       customClass: 'context-menu-danger',
       onClick: () => store.removeWidget(props.widgetId),
     }

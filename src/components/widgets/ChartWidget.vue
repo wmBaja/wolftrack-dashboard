@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, h} from 'vue'
 import BaseWidget from '@/components/widgets/BaseWidget.vue'
 import type { MenuOptions } from '@imengyu/vue3-context-menu'
 
@@ -29,28 +29,28 @@ const customMenuItems = computed<MenuOptions['items']>(() => [
   { divided: true },
   {
     label: 'Chart Type',
-    icon: '📊',
+    icon: h('span', '📊'),
     children: [
       {
         label: 'Line Chart',
-        icon: chartType.value === 'line' ? '✓' : '',
+        icon: chartType.value === 'line' ? h('span', '✓') : h('span', ''),
         onClick: () => changeChartType('line'),
       },
       {
         label: 'Bar Chart',
-        icon: chartType.value === 'bar' ? '✓' : '',
+        icon: chartType.value === 'bar' ? h('span', '✓') : h('span', ''),
         onClick: () => changeChartType('bar'),
       },
       {
         label: 'Pie Chart',
-        icon: chartType.value === 'pie' ? '✓' : '',
+        icon: chartType.value === 'pie' ? h('span', '✓') : h('span', ''),
         onClick: () => changeChartType('pie'),
       },
     ],
   },
   {
     label: 'Export Chart',
-    icon: '💾',
+    icon: h('span', '💾'),
     onClick: exportChart,
   },
 ])

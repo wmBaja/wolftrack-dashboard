@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed, ref, type Component } from 'vue'
+import { onMounted, computed, ref, h, type Component } from 'vue'
 import { GridLayout } from 'grid-layout-plus'
 import { useWidgetStore } from '@/stores/widgetStore'
 import ContextMenu from '@imengyu/vue3-context-menu'
@@ -49,18 +49,18 @@ function handleGridContextMenu(event: MouseEvent) {
     items: [
       {
         label: 'Add Base Widget',
-        icon: '➕',
+        icon: h('span', '➕'),
         onClick: () => widgetStore.addWidget(WIDGET_TYPES.BASE, { x: 0, y: 0 }),
       },
       {
         label: 'Add Chart Widget',
-        icon: '➕',
+        icon: h('span', '➕'),
         onClick: () => widgetStore.addWidget(WIDGET_TYPES.CHART, { x: 0, y: 0 }),
       },
       { divided: true },
       {
         label: 'Clear All Widgets',
-        icon: '🗑️',
+        icon: h('span', '🗑️'),
         customClass: 'context-menu-danger',
         onClick: () => {
           showClearAllConfirm.value = true
