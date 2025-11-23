@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed, ref, h, type Component } from 'vue'
+import { onMounted, ref, h, type Component, watch } from 'vue'
 import { GridLayout } from 'grid-layout-plus'
 import { useWidgetStore } from '@/stores/widgetStore'
 import ContextMenu from '@imengyu/vue3-context-menu'
@@ -28,10 +28,24 @@ onMounted(() => {
   widgetStore.loadFromLocalStorage()
 })
 
-const layout = computed({
-  get: () => widgetStore.widgets,
-  set: (newLayout: Widget[]) => widgetStore.updateLayout(newLayout)
+watch(() => widgetStore.widgets.length, () => {
+  const currentIds = new Set(widgetStore.widgets.map(w => w.i))
+  Object.keys(widgetRefs.value).forEach(id => {
+    if (!currentIds.has(id)) {
+      delete widgetRefs.value[id]
+    }
+  })
 })
+
+function handleLayoutUpdate(newLayout: Widget[]) {
+  widgetStore.updateLayout(newLayout)
+}
+
+function setWidgetRef(widgetId: string, el: WidgetExpose | null) {
+  if (el) {
+    widgetRefs.value[widgetId] = el
+  }
+}
 
 function handleGridContextMenu(event: MouseEvent) {
   const target = event.target as HTMLElement
@@ -75,7 +89,7 @@ function handleGridContextMenu(event: MouseEvent) {
   <div class="dashboard-grid-container" @contextmenu="handleGridContextMenu">
     <div class="grid-wrapper custom-scrollbar">
       <GridLayout
-        v-model:layout="layout"
+        v-model:layout="widgetStore.widgets"
         :col-num="16"
         :row-height="30"
         :is-draggable="true"
@@ -86,11 +100,12 @@ function handleGridContextMenu(event: MouseEvent) {
         :use-css-transforms="true"
         :prevent-collision="false"
         :vertical-compact="false"
+        @layout-updated="handleLayoutUpdate"
       >
         <template #item="{ item }">
           <component
             :is="componentMap[(item as Widget).type] || BaseWidget"
-            :ref="(el: any) => widgetRefs[item.i] = el"
+            :ref="(el: WidgetExpose | null) => setWidgetRef(String(item.i), el)"
             :widget-id="item.i"
             :data-widget-id="item.i"
           />
@@ -104,6 +119,7 @@ function handleGridContextMenu(event: MouseEvent) {
       message="Are you sure you want to delete all widgets?"
       confirm-text="Delete"
       cancel-text="Cancel"
+      danger
       @confirm="widgetStore.clearAll()"
       @close="showClearAllConfirm = false"
     />

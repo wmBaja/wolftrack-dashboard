@@ -25,11 +25,14 @@ const WIDGET_DEFAULTS: Record<WIDGET_TYPES, { w: number; h: number; minW: number
   [WIDGET_TYPES.CHART]: { w: 6, h: 6, minW: 4, minH: 4 },
 }
 
-let widgetIdCounter = 0
+// Generate unique ID using timestamp + random string
+function generateUniqueId(): string {
+  return `widget-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
 
 export function createWidget(type: WIDGET_TYPES, position: {x: number, y: number, w?: number, h?: number}): Widget {
   const defaults = WIDGET_DEFAULTS[type]
-  const id = `widget-${widgetIdCounter++}`
+  const id = generateUniqueId()
 
   return {
     i: id,
