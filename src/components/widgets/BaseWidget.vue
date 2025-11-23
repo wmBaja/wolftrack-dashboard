@@ -2,17 +2,23 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useWidgetStore } from '@/stores/widgetStore'
+import { useContextMenu } from '@/composables/useContextMenu'
+import type { ContextMenuItem } from '@/components/ContextMenu.vue'
+import type { WIDGET_TYPES } from '@/types/widgets'
 
 interface Props {
   widgetId: string
   icon?: string
+  customMenuItems?: ContextMenuItem[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  icon: '📦'
+  icon: '📦',
+  customMenuItems: () => []
 })
 
 const store = useWidgetStore()
+const contextMenu = useContextMenu()
 const widget = computed(() => store.getWidgetById(props.widgetId))
 
 const isEditing = ref(false)
@@ -20,7 +26,6 @@ const isLoading = ref(false)
 const localTitle = ref('')
 const titleInputRef = ref<HTMLInputElement>()
 
-// Simple refresh handler - override in slot if needed
 async function handleRefresh() {
   isLoading.value = true
   try {
@@ -34,27 +39,89 @@ function startEditTitle() {
   if (!widget.value) return
   localTitle.value = widget.value.title
   isEditing.value = true
-  setTimeout(() => {
-    titleInputRef.value?.focus()
-    titleInputRef.value?.select()
-  }, 50)
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!isEditing.value) return
+      const el = titleInputRef.value
+      if (!el) return
+      el.focus()
+      el.select()
+    })
+  })
 }
 
 function saveTitle() {
   const trimmed = localTitle.value.trim()
-  if (trimmed) {
+  if (trimmed && widget.value) {
     store.updateWidget(props.widgetId, { title: trimmed })
   }
   isEditing.value = false
 }
 
 function cancelEdit() {
+  if (widget.value) {
+    localTitle.value = widget.value.title
+  }
   isEditing.value = false
 }
 
-// Add setLoading to exposed methods
 function setLoading(value: boolean) {
   isLoading.value = value
+}
+
+function getContextMenuItems(): ContextMenuItem[] {
+  const commonItems: ContextMenuItem[] = [
+    {
+      label: 'Edit Title',
+      icon: '✏️',
+      action: startEditTitle,
+    },
+    {
+      label: 'Refresh',
+      icon: '🔄',
+      action: handleRefresh,
+    },
+  ]
+
+  // Build full menu: common items + custom items + actions
+  const allItems: ContextMenuItem[] = [...commonItems]
+
+  if (props.customMenuItems.length > 0) {
+    allItems.push(...props.customMenuItems)
+  }
+
+  // Add common actions at the end
+  if (props.customMenuItems.length > 0) {
+    allItems.push({ divider: true } as ContextMenuItem)
+  }
+
+  allItems.push(
+    {
+      label: 'Duplicate',
+      icon: '📋',
+      action: () => {
+        if (widget.value) {
+          store.addWidget(widget.value.type as WIDGET_TYPES, {
+            x: widget.value.x + 1,
+            y: widget.value.y + 1,
+          })
+        }
+      },
+    },
+    { divider: true } as ContextMenuItem,
+    {
+      label: 'Delete',
+      icon: '🗑️',
+      danger: true,
+      action: () => store.removeWidget(props.widgetId),
+    }
+  )
+
+  return allItems
+}
+
+function handleContextMenu(event: MouseEvent) {
+  contextMenu.open(event, getContextMenuItems())
 }
 
 defineExpose({ handleRefresh, startEditTitle, setLoading })
@@ -68,6 +135,7 @@ defineExpose({ handleRefresh, startEditTitle, setLoading })
       'base-widget--editing': isEditing,
       'base-widget--loading': isLoading
     }"
+    @contextmenu="handleContextMenu"
   >
     <header class="base-widget__header">
       <div class="base-widget__title-section">
@@ -91,7 +159,7 @@ defineExpose({ handleRefresh, startEditTitle, setLoading })
           v-else
           class="base-widget__title"
           @dblclick="startEditTitle"
-          :title="localTitle"
+          :title="widget?.title"
         >
           {{ widget.title }}
         </h3>

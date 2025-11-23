@@ -1,29 +1,65 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import BaseWidget from '@/components/widgets/BaseWidget.vue'
+import type { ContextMenuItem } from '@/components/ContextMenu.vue'
 
 defineProps<{
   widgetId: string
 }>()
 
 const baseWidgetRef = ref<InstanceType<typeof BaseWidget>>()
+const chartType = ref<'line' | 'bar' | 'pie'>('line')
 
-// Specific logic for this widget type
 async function loadChartData() {
   console.log('Fetching chart data...')
   await new Promise(resolve => setTimeout(resolve, 1000))
 }
 
-// Expose the methods that DashboardGrid expects
-// We forward these to the internal BaseWidget or handle them ourselves
+function changeChartType(type: 'line' | 'bar' | 'pie') {
+  chartType.value = type
+  console.log('Changed chart type to:', type)
+}
+
+function exportChart() {
+  console.log('Exporting chart...')
+}
+
+const customMenuItems = computed<ContextMenuItem[]>(() => [
+  { divider: true } as ContextMenuItem,
+  {
+    label: 'Chart Type',
+    icon: '📊',
+    disabled: true,
+    action: () => {},
+  },
+  {
+    label: '  → Line Chart',
+    icon: chartType.value === 'line' ? '✓' : '',
+    action: () => changeChartType('line'),
+  },
+  {
+    label: '  → Bar Chart',
+    icon: chartType.value === 'bar' ? '✓' : '',
+    action: () => changeChartType('bar'),
+  },
+  {
+    label: '  → Pie Chart',
+    icon: chartType.value === 'pie' ? '✓' : '',
+    action: () => changeChartType('pie'),
+  },
+  { divider: true } as ContextMenuItem,
+  {
+    label: 'Export Chart',
+    icon: '💾',
+    action: exportChart,
+  },
+])
+
 const handleRefresh = async () => {
-  // 1. Trigger loading state on shell
   baseWidgetRef.value?.setLoading(true)
   try {
-    // 2. Do specific work
     await loadChartData()
   } finally {
-    // 3. Stop loading state
     baseWidgetRef.value?.setLoading(false)
   }
 }
@@ -40,10 +76,10 @@ defineExpose({ handleRefresh, startEditTitle })
     ref="baseWidgetRef"
     :widget-id="widgetId"
     icon="📈"
+    :custom-menu-items="customMenuItems"
   >
-    <!-- This content goes into the BaseWidget slot -->
     <div class="chart-content">
-      <p>Chart Visualization Goes Here</p>
+      <p>{{ chartType.toUpperCase() }} Chart Visualization</p>
       <p>ID: {{ widgetId }}</p>
     </div>
   </BaseWidget>

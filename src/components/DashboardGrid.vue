@@ -35,55 +35,13 @@ const layout = computed({
   set: (newLayout: Widget[]) => widgetStore.updateLayout(newLayout)
 })
 
-function handleWidgetContextMenu(event: MouseEvent, widgetId?: string) {
-  event.stopPropagation()
-  contextMenu.open(event, widgetId)
-}
-
-const menuItems = computed<ContextMenuItem[]>(() => {
-  const widgetId = contextMenu.data.value
-
-  if (widgetId) {
-    const widget = widgetStore.getWidgetById(String(widgetId))
-
-    return [
-      {
-        label: 'Edit Widget',
-        icon: '✏️',
-        action: () => {
-          widgetRefs.value[String(widgetId)]?.startEditTitle()
-        },
-      },
-      {
-        label: 'Duplicate',
-        icon: '📋',
-        action: () => {
-          if (widget) {
-            widgetStore.addWidget(widget.type as WIDGET_TYPES, {
-              x: widget.x + 1,
-              y: widget.y + 1,
-            })
-          }
-        },
-      },
-      {
-        label: 'Refresh',
-        icon: '🔄',
-        action: () => {
-          widgetRefs.value[String(widgetId)]?.handleRefresh()
-        },
-      },
-      { divider: true } as ContextMenuItem,
-      {
-        label: 'Delete',
-        icon: '🗑️',
-        danger: true,
-        action: () => widgetStore.removeWidget(String(widgetId)),
-      },
-    ]
+function handleGridContextMenu(event: MouseEvent) {
+  const target = event.target as HTMLElement
+  if (target.closest('.vue-grid-item')) {
+    return
   }
 
-  return [
+  const gridMenuItems: ContextMenuItem[] = [
     {
       label: 'Add Base Widget',
       icon: '➕',
@@ -100,15 +58,18 @@ const menuItems = computed<ContextMenuItem[]>(() => {
       icon: '🗑️',
       danger: true,
       action: () => {
+        contextMenu.close()
         showClearAllConfirm.value = true
       },
     },
   ]
-})
+
+  contextMenu.open(event, gridMenuItems)
+}
 </script>
 
 <template>
-  <div class="dashboard-grid-container" @contextmenu="handleWidgetContextMenu($event)">
+  <div class="dashboard-grid-container" @contextmenu="handleGridContextMenu">
     <div class="grid-wrapper custom-scrollbar">
       <GridLayout
         v-model:layout="layout"
@@ -129,7 +90,6 @@ const menuItems = computed<ContextMenuItem[]>(() => {
             :ref="(el: any) => widgetRefs[item.i] = el"
             :widget-id="item.i"
             :data-widget-id="item.i"
-            @contextmenu="handleWidgetContextMenu($event, String(item.i))"
           />
         </template>
       </GridLayout>
@@ -139,7 +99,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
       :show="contextMenu.show.value"
       :x="contextMenu.x.value"
       :y="contextMenu.y.value"
-      :items="menuItems"
+      :items="contextMenu.items.value"
       @close="contextMenu.close"
     />
 

@@ -1,30 +1,31 @@
-// src/composables/useContextMenu.ts
 import { ref } from 'vue'
+import type { ContextMenuItem } from '@/components/ContextMenu.vue'
+
+const show = ref(false)
+const x = ref(0)
+const y = ref(0)
+const items = ref<ContextMenuItem[]>([])
 
 export function useContextMenu() {
-  const show = ref(false)
-  const x = ref(0)
-  const y = ref(0)
-  const data = ref<unknown>(null)
-
-  function open(event: MouseEvent, contextData?: unknown) {
+  function open(event: MouseEvent, menuItems: ContextMenuItem[]) {
     event.preventDefault()
+    event.stopPropagation()
     x.value = event.clientX
     y.value = event.clientY
-    data.value = contextData
+    items.value = menuItems
     show.value = true
   }
 
   function close() {
     show.value = false
-    data.value = null
+    items.value = []
   }
 
   return {
     show,
     x,
     y,
-    data,
+    items,
     open,
     close,
   }
