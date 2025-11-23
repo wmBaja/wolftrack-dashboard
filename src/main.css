@@ -4,7 +4,7 @@
 @theme {
   --color-bg: #0a0e1a;
   --color-panel: #1f2433;
-  --color-border: #1e2533;
+  --color-border: #0e131c;
   --color-accent: #3b82f6;
   --color-text: #f1f5f9;
   --color-muted: #64748b;
@@ -46,7 +46,7 @@ a:hover { opacity: 0.8; }
 }
 
 .custom-scrollbar.scrolling {
-  scrollbar-color: var(--color-border) transparent;
+  scrollbar-color: var(--color-panel) transparent;
 }
 
 /* Vue Transitions: Fade */
@@ -74,4 +74,13 @@ a:hover { opacity: 0.8; }
 /* Loading Spinner Utility */
 .spinner {
   animation: spin 0.8s linear infinite;
+}
+
+/* Custom context menu styling for danger items */
+:deep(.context-menu-danger) {
+  color: var(--color-danger) !important;
+}
+
+:deep(.context-menu-danger:hover) {
+  background: rgba(239, 68, 68, 0.1) !important;
 }

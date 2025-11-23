@@ -2,14 +2,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useWidgetStore } from '@/stores/widgetStore'
-import { useContextMenu } from '@/composables/useContextMenu'
-import type { ContextMenuItem } from '@/components/ContextMenu.vue'
+import ContextMenu from '@imengyu/vue3-context-menu'
+import type { MenuOptions } from '@imengyu/vue3-context-menu'
 import type { WIDGET_TYPES } from '@/types/widgets'
 
 interface Props {
   widgetId: string
   icon?: string
-  customMenuItems?: ContextMenuItem[]
+  customMenuItems?: MenuOptions['items']
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -18,7 +18,6 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const store = useWidgetStore()
-const contextMenu = useContextMenu()
 const widget = computed(() => store.getWidgetById(props.widgetId))
 
 const isEditing = ref(false)
@@ -69,37 +68,35 @@ function setLoading(value: boolean) {
   isLoading.value = value
 }
 
-function getContextMenuItems(): ContextMenuItem[] {
-  const commonItems: ContextMenuItem[] = [
+function handleContextMenu(event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+
+  const menuItems: MenuOptions['items'] = [
     {
       label: 'Edit Title',
       icon: '✏️',
-      action: startEditTitle,
+      onClick: startEditTitle,
     },
     {
       label: 'Refresh',
       icon: '🔄',
-      action: handleRefresh,
+      onClick: handleRefresh,
     },
   ]
 
-  // Build full menu: common items + custom items + actions
-  const allItems: ContextMenuItem[] = [...commonItems]
-
-  if (props.customMenuItems.length > 0) {
-    allItems.push(...props.customMenuItems)
+  // Add custom menu items
+  if (props.customMenuItems && props.customMenuItems.length > 0) {
+    menuItems.push(...props.customMenuItems)
+    menuItems.push({ divided: true })
   }
 
-  // Add common actions at the end
-  if (props.customMenuItems.length > 0) {
-    allItems.push({ divider: true } as ContextMenuItem)
-  }
-
-  allItems.push(
+  // Add common actions
+  menuItems.push(
     {
       label: 'Duplicate',
       icon: '📋',
-      action: () => {
+      onClick: () => {
         if (widget.value) {
           store.addWidget(widget.value.type as WIDGET_TYPES, {
             x: widget.value.x + 1,
@@ -108,20 +105,22 @@ function getContextMenuItems(): ContextMenuItem[] {
         }
       },
     },
-    { divider: true } as ContextMenuItem,
+    { divided: true },
     {
       label: 'Delete',
       icon: '🗑️',
-      danger: true,
-      action: () => store.removeWidget(props.widgetId),
+      customClass: 'context-menu-danger',
+      onClick: () => store.removeWidget(props.widgetId),
     }
   )
 
-  return allItems
-}
-
-function handleContextMenu(event: MouseEvent) {
-  contextMenu.open(event, getContextMenuItems())
+  ContextMenu.showContextMenu({
+    x: event.x,
+    y: event.y,
+    items: menuItems,
+    theme: 'mac dark',
+    zIndex: 1000,
+  })
 }
 
 defineExpose({ handleRefresh, startEditTitle, setLoading })

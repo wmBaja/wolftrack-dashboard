@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import BaseWidget from '@/components/widgets/BaseWidget.vue'
-import type { ContextMenuItem } from '@/components/ContextMenu.vue'
+import type { MenuOptions } from '@imengyu/vue3-context-menu'
 
 defineProps<{
   widgetId: string
@@ -24,34 +24,34 @@ function exportChart() {
   console.log('Exporting chart...')
 }
 
-const customMenuItems = computed<ContextMenuItem[]>(() => [
-  { divider: true } as ContextMenuItem,
+// Custom menu items with submenu
+const customMenuItems = computed<MenuOptions['items']>(() => [
+  { divided: true },
   {
     label: 'Chart Type',
     icon: '📊',
-    disabled: true,
-    action: () => {},
+    children: [
+      {
+        label: 'Line Chart',
+        icon: chartType.value === 'line' ? '✓' : '',
+        onClick: () => changeChartType('line'),
+      },
+      {
+        label: 'Bar Chart',
+        icon: chartType.value === 'bar' ? '✓' : '',
+        onClick: () => changeChartType('bar'),
+      },
+      {
+        label: 'Pie Chart',
+        icon: chartType.value === 'pie' ? '✓' : '',
+        onClick: () => changeChartType('pie'),
+      },
+    ],
   },
-  {
-    label: '  → Line Chart',
-    icon: chartType.value === 'line' ? '✓' : '',
-    action: () => changeChartType('line'),
-  },
-  {
-    label: '  → Bar Chart',
-    icon: chartType.value === 'bar' ? '✓' : '',
-    action: () => changeChartType('bar'),
-  },
-  {
-    label: '  → Pie Chart',
-    icon: chartType.value === 'pie' ? '✓' : '',
-    action: () => changeChartType('pie'),
-  },
-  { divider: true } as ContextMenuItem,
   {
     label: 'Export Chart',
     icon: '💾',
-    action: exportChart,
+    onClick: exportChart,
   },
 ])
 

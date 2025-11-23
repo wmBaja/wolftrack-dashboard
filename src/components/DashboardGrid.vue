@@ -2,15 +2,13 @@
 import { onMounted, computed, ref, type Component } from 'vue'
 import { GridLayout } from 'grid-layout-plus'
 import { useWidgetStore } from '@/stores/widgetStore'
-import { useContextMenu } from '@/composables/useContextMenu'
+import ContextMenu from '@imengyu/vue3-context-menu'
 import BaseWidget from '@/components/widgets/BaseWidget.vue'
-import ContextMenu, { type ContextMenuItem } from '@/components/ContextMenu.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ChartWidget from '@/components/widgets/ChartWidget.vue'
 import { WIDGET_TYPES, type Widget } from '@/types/widgets'
 
 const widgetStore = useWidgetStore()
-const contextMenu = useContextMenu()
 
 interface WidgetExpose {
   handleRefresh: () => Promise<void>
@@ -41,30 +39,35 @@ function handleGridContextMenu(event: MouseEvent) {
     return
   }
 
-  const gridMenuItems: ContextMenuItem[] = [
-    {
-      label: 'Add Base Widget',
-      icon: '➕',
-      action: () => widgetStore.addWidget(WIDGET_TYPES.BASE, { x: 0, y: 0 }),
-    },
-    {
-      label: 'Add Chart Widget',
-      icon: '➕',
-      action: () => widgetStore.addWidget(WIDGET_TYPES.CHART, { x: 0, y: 0 }),
-    },
-    { divider: true } as ContextMenuItem,
-    {
-      label: 'Clear All Widgets',
-      icon: '🗑️',
-      danger: true,
-      action: () => {
-        contextMenu.close()
-        showClearAllConfirm.value = true
-      },
-    },
-  ]
+  event.preventDefault()
 
-  contextMenu.open(event, gridMenuItems)
+  ContextMenu.showContextMenu({
+    x: event.x,
+    y: event.y,
+    theme: 'mac dark',
+    zIndex: 1000,
+    items: [
+      {
+        label: 'Add Base Widget',
+        icon: '➕',
+        onClick: () => widgetStore.addWidget(WIDGET_TYPES.BASE, { x: 0, y: 0 }),
+      },
+      {
+        label: 'Add Chart Widget',
+        icon: '➕',
+        onClick: () => widgetStore.addWidget(WIDGET_TYPES.CHART, { x: 0, y: 0 }),
+      },
+      { divided: true },
+      {
+        label: 'Clear All Widgets',
+        icon: '🗑️',
+        customClass: 'context-menu-danger',
+        onClick: () => {
+          showClearAllConfirm.value = true
+        },
+      },
+    ],
+  })
 }
 </script>
 
@@ -94,14 +97,6 @@ function handleGridContextMenu(event: MouseEvent) {
         </template>
       </GridLayout>
     </div>
-
-    <ContextMenu
-      :show="contextMenu.show.value"
-      :x="contextMenu.x.value"
-      :y="contextMenu.y.value"
-      :items="contextMenu.items.value"
-      @close="contextMenu.close"
-    />
 
     <ConfirmDialog
       :show="showClearAllConfirm"
