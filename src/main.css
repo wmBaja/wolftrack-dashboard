@@ -39,22 +39,14 @@ h1, h2, h3, h4, h5, h6 { margin: 0; font-weight: 600; }
 a { color: var(--color-accent); text-decoration: none; }
 a:hover { opacity: 0.8; }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--color-muted);
+.custom-scrollbar.scrolling {
+  scrollbar-color: var(--color-border) transparent;
 }
 
 /* Vue Transitions: Fade */

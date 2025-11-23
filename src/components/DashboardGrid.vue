@@ -109,7 +109,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 
 <template>
   <div class="dashboard-grid-container" @contextmenu="handleWidgetContextMenu($event)">
-    <div class="grid-wrapper">
+    <div class="grid-wrapper custom-scrollbar">
       <GridLayout
         v-model:layout="layout"
         :col-num="16"
