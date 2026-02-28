@@ -77,10 +77,10 @@ a:hover { opacity: 0.8; }
 }
 
 /* Custom context menu styling for danger items */
-:deep(.context-menu-danger) {
+.context-menu-danger {
   color: var(--color-danger) !important;
 }
 
-:deep(.context-menu-danger:hover) {
+.context-menu-danger:hover {
   background: rgba(239, 68, 68, 0.1) !important;
 }
