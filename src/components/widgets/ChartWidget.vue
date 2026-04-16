@@ -98,7 +98,7 @@ function getAlignedData(): AlignedData {
         }
 
         const currTime = sigData.timestamps[ptr]
-        if (currTime !== undefined && currTime <= targetTime) {
+        if (currTime === targetTime) {
             values[i] = sigData.values[ptr]
         }
       }
@@ -138,7 +138,7 @@ defineExpose({ handleRefresh, startEditTitle })
         </div>
         <select @change="addSignal" class="signal-select">
           <option value="">-- Add Signal --</option>
-          <option v-for="sig in dataStore.dbcSignals" :key="sig.name" :value="sig.name">
+          <option v-for="sig in dataStore.dbcSignals" :key="sig.id" :value="sig.id">
             {{ sig.message }} :: {{ sig.name }}
           </option>
         </select>

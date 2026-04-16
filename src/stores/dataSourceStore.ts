@@ -23,7 +23,7 @@ export const useDataSourceStore = defineStore('dataSource', () => {
     playback_speed: 1.0,
   })
 
-  const dbcSignals = ref<{ message: string, name: string, unit: string }[]>([])
+  const dbcSignals = ref<{ id: string, message: string, name: string, unit: string }[]>([])
 
   async function fetchSignals(): Promise<void> {
     try {

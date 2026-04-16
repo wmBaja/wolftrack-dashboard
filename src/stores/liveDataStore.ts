@@ -4,6 +4,7 @@ import { ref } from 'vue'
 const WS_URL = 'ws://127.0.0.1:8000/ws/stream'
 
 export interface SignalData {
+  id: string
   name: string
   value: number | string
   timestamp: number
@@ -38,12 +39,12 @@ export const useLiveDataStore = defineStore('liveData', () => {
         for (const data of payload) {
           if (typeof data.value !== 'number') continue // Plottable data must be numbers
 
-          if (!buffers.value[data.name]) {
+          if (!buffers.value[data.id]) {
             // First time seeing this signal, initialize empty arrays
-            buffers.value[data.name] = { timestamps: [], values: [] }
+            buffers.value[data.id] = { timestamps: [], values: [] }
           }
           
-          const buffer = buffers.value[data.name]
+          const buffer = buffers.value[data.id]
           if (buffer) {
             buffer.timestamps.push(data.timestamp)
             buffer.values.push(data.value as number)

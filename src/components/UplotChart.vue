@@ -36,7 +36,8 @@ const initChart = () => {
             label: s,
             stroke: color,
             width: 1.5,
-            spanGaps: true
+            spanGaps: true,
+            paths: uPlot.paths.spline?.(),
         })
     })
 
