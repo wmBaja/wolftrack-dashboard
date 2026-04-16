@@ -1,5 +1,5 @@
 import path from 'path'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 
 const __filename = new URL('', import.meta.url).pathname;
 const __dirname = path.dirname(__filename);
@@ -31,6 +31,13 @@ function createWindow() {
     win.loadFile(indexPath);
   }
 }
+
+// Handle file open dialog requests from the renderer
+ipcMain.handle('dialog:openFile', async (_event, filters) => {
+  const result = await dialog.showOpenDialog({ properties: ['openFile'], filters })
+  if (result.canceled || result.filePaths.length === 0) return null
+  return result.filePaths[0]
+})
 
 app.whenReady().then(() => {
   createWindow();

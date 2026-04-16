@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DataSourcePanel from './DataSourcePanel.vue'
 </script>
 
 <template>
@@ -7,6 +8,8 @@
       <div class="flex items-center justify-between h-14">
 
         <img src="@/assets/images/bajaLogo-dark.png" alt="Pack Motorsports Baja SAE Logo" class="min-w h-full py-1" />
+
+        <DataSourcePanel />
 
       </div>
     </div>
