@@ -23,6 +23,19 @@ export const useDataSourceStore = defineStore('dataSource', () => {
     playback_speed: 1.0,
   })
 
+  const dbcSignals = ref<{ message: string, name: string, unit: string }[]>([])
+
+  async function fetchSignals(): Promise<void> {
+    try {
+      const res = await fetch(`${VISUALIZER_BASE}/api/signals`)
+      if (!res.ok) return
+      const data = await res.json()
+      dbcSignals.value = data.signals || []
+    } catch (e) {
+      console.error('Failed to fetch signals', e)
+    }
+  }
+
   async function fetchConfig(): Promise<void> {
     try {
       const res = await fetch(`${VISUALIZER_BASE}/api/config`)
@@ -30,6 +43,7 @@ export const useDataSourceStore = defineStore('dataSource', () => {
       const data = await res.json()
       config.value = data
       status.value = 'running'
+      await fetchSignals()
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)
       status.value = 'error'
@@ -70,6 +84,7 @@ export const useDataSourceStore = defineStore('dataSource', () => {
       if (!res.ok) throw new Error(data.detail ?? 'Unknown error')
       config.value = payload
       status.value = 'running'
+      await fetchSignals()
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)
       status.value = 'error'
@@ -88,5 +103,5 @@ export const useDataSourceStore = defineStore('dataSource', () => {
     }
   }
 
-  return { status, error, config, fetchConfig, applyConfig, stop }
+  return { status, error, config, dbcSignals, fetchConfig, applyConfig, stop, fetchSignals }
 })
