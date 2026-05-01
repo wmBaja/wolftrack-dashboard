@@ -1,7 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-const VISUALIZER_BASE = 'http://127.0.0.1:8000'
+let backendPort: number | null = null;
+async function getVisualizerBase() {
+  if (!backendPort) {
+    if (window.electronAPI?.getBackendPort) {
+      backendPort = await window.electronAPI.getBackendPort();
+    } else {
+      backendPort = 8000;
+    }
+  }
+  return `http://127.0.0.1:${backendPort}`;
+}
 
 export type DataSourceMode = 'zmq' | 'logfile'
 export type DataSourceStatus = 'stopped' | 'running' | 'loading' | 'error'
@@ -27,7 +37,8 @@ export const useDataSourceStore = defineStore('dataSource', () => {
 
   async function fetchSignals(): Promise<void> {
     try {
-      const res = await fetch(`${VISUALIZER_BASE}/api/signals`)
+      const baseUrl = await getVisualizerBase()
+      const res = await fetch(`${baseUrl}/api/signals`)
       if (!res.ok) return
       const data = await res.json()
       dbcSignals.value = data.signals || []
@@ -38,7 +49,8 @@ export const useDataSourceStore = defineStore('dataSource', () => {
 
   async function fetchConfig(): Promise<void> {
     try {
-      const res = await fetch(`${VISUALIZER_BASE}/api/config`)
+      const baseUrl = await getVisualizerBase()
+      const res = await fetch(`${baseUrl}/api/config`)
       if (!res.ok) throw new Error(`Failed to fetch config: ${res.statusText}`)
       const data = await res.json()
       config.value = data
@@ -75,7 +87,8 @@ export const useDataSourceStore = defineStore('dataSource', () => {
         formData.append('existing_dbc', payload.dbc_file)
       }
 
-      const res = await fetch(`${VISUALIZER_BASE}/api/upload_config`, {
+      const baseUrl = await getVisualizerBase()
+      const res = await fetch(`${baseUrl}/api/upload_config`, {
         method: 'POST',
         body: formData,
       })
@@ -95,7 +108,8 @@ export const useDataSourceStore = defineStore('dataSource', () => {
     status.value = 'loading'
     error.value = null
     try {
-      await fetch(`${VISUALIZER_BASE}/api/stop`, { method: 'POST' })
+      const baseUrl = await getVisualizerBase()
+      await fetch(`${baseUrl}/api/stop`, { method: 'POST' })
       status.value = 'stopped'
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)

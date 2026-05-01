@@ -18,7 +18,8 @@ coverage
 /cypress/screenshots/
 
 dist-electron
-
+release
+backend
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

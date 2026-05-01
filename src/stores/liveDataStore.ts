@@ -1,7 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-const WS_URL = 'ws://127.0.0.1:8000/ws/stream'
+let backendPort: number | null = null;
+async function getVisualizerWsBase() {
+  if (!backendPort) {
+    if (window.electronAPI?.getBackendPort) {
+      backendPort = await window.electronAPI.getBackendPort();
+    } else {
+      backendPort = 8000;
+    }
+  }
+  return `ws://127.0.0.1:${backendPort}/ws/stream`;
+}
 
 export interface SignalData {
   id: string
@@ -21,11 +31,12 @@ export const useLiveDataStore = defineStore('liveData', () => {
   
   let ws: WebSocket | null = null
 
-  function connect() {
+  async function connect() {
     if (ws || isConnecting.value) return
     isConnecting.value = true
 
-    ws = new WebSocket(WS_URL)
+    const wsUrl = await getVisualizerWsBase()
+    ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
       isConnected.value = true

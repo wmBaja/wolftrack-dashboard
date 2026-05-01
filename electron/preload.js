@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
   sendMessage: (message) => ipcRenderer.send('toMain', message),
@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('fromMain', (event, args) => callback(args))
   },
   openFile: (filters) => ipcRenderer.invoke('dialog:openFile', filters),
+  getBackendPort: () => ipcRenderer.invoke('get-backend-port'),
 })

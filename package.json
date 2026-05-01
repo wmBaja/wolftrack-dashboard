@@ -1,7 +1,7 @@
 {
   "name": "wolftrack",
   "version": "0.0.0",
-  "main": "electron/main.js",
+  "main": "dist-electron/main.js",
   "type": "module",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
@@ -16,21 +16,26 @@
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix",
     "format": "prettier --write src/",
-    "electron:build": "npm run build && electron-builder"
+    "electron:build": "node build.js"
   },
   "build": {
-    "appId": "com.wolfpackBaja.wolftrack",
+    "appId": "com.packMotorsportsBaja.wolftrack",
     "productName": "WolfTrack",
     "files": [
-      "electron/**/*",
+      "dist-electron/**/*",
       "package.json"
     ],
     "extraResources": [
-      "dist/**/*"
+      "dist/**/*",
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": ["**/*"]
+      }
     ],
     "directories": {
       "buildResources": "assets",
-      "output": "dist-electron"
+      "output": "release"
     },
     "asar": true,
     "mac": {
