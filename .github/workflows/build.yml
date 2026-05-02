@@ -1,0 +1,110 @@
+name: Build Electron App
+
+on:
+  push:
+    branches: [ main, dev]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # 1. Checkout the frontend (Dashboard)
+      - name: Checkout Dashboard
+        uses: actions/checkout@v4
+        with:
+          path: dashboard
+
+      # 2. Download the backend (Visualizer)
+      - name: Determine Backend Tag
+        id: backend-tag
+        run: echo "tag=${{ github.ref_name == 'main' && 'latest' || 'dev' }}" >> $GITHUB_ENV
+
+      - name: Download Backend Binary
+        run: |
+          mkdir -p dashboard/backend
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            gh release download ${{ env.tag }} --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer.exe" --dir dashboard/backend
+          else
+            gh release download ${{ env.tag }} --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer" --dir dashboard/backend
+            chmod +x dashboard/backend/wolftrack-visualizer
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # 3. Setup environments
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 4. Inject Environment Variables into the bundled backend
+      - name: Configure .env
+        run: |
+          cd dashboard/backend
+          echo "ZMQ_ENABLED=${{ secrets.ZMQ_ENABLED || 'true' }}" >> .env
+          echo "ZMQ_PORT=${{ secrets.ZMQ_PORT || 5555 }}" >> .env
+          echo "ZMQ_HOST=${{ secrets.ZMQ_HOST || '127.0.0.1' }}" >> .env
+          echo "FASTAPI_HOST=${{ secrets.FASTAPI_HOST || '127.0.0.1' }}" >> .env
+          echo "FASTAPI_PORT=${{ secrets.FASTAPI_PORT || 0 }}" >> .env
+          echo "APP_LOG_DIR=${{ secrets.APP_LOG_DIR || './app_logs' }}" >> .env
+          echo "APP_LOG_LEVEL=${{ secrets.APP_LOG_LEVEL || 'INFO' }}" >> .env
+          echo "APP_LOG_TO_CONSOLE=${{ secrets.APP_LOG_TO_CONSOLE || 'true' }}" >> .env
+          echo "APP_LOG_TO_FILE=${{ secrets.APP_LOG_TO_FILE || 'true' }}" >> .env
+          echo "APP_LOG_MAX_FILE_SIZE_MB=${{ secrets.APP_LOG_MAX_FILE_SIZE_MB || 10 }}" >> .env
+          echo "APP_LOG_BACKUP_COUNT=${{ secrets.APP_LOG_BACKUP_COUNT || 5 }}" >> .env
+          echo "APP_LOG_FORMAT=${{ secrets.APP_LOG_FORMAT || 'detailed' }}" >> .env
+        shell: bash
+
+      # 6. Install Node dependencies and build the Electron app
+      - name: Install Dashboard Dependencies
+        run: |
+          cd dashboard
+          npm install
+        shell: bash
+
+      - name: Build Electron App
+        run: |
+          cd dashboard
+          npm run build
+          npx electron-builder
+        shell: bash
+
+      # 7. Upload the final built apps as Artifacts
+      - name: Upload Built App
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolftrack-app-${{ matrix.os }}
+          path: |
+            dashboard/release/*.exe
+            dashboard/release/*.dmg
+            dashboard/release/*.AppImage
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        
+      - name: Set Release Tag
+        id: tag
+        run: echo "tag_name=${{ github.ref_name == 'main' && 'latest' || 'dev' }}" >> $GITHUB_OUTPUT
+        
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          prerelease: true
+          files: |
+            wolftrack-app-ubuntu-latest/*.AppImage
+            wolftrack-app-windows-latest/*.exe
+            wolftrack-app-macos-latest/*.dmg

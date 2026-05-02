@@ -17,6 +17,7 @@ export interface Widget extends LayoutItem {
   type: WIDGET_TYPES
   title: string
   config: WidgetConfig
+  signals: string[]
   createdAt: number
 }
 
@@ -45,6 +46,7 @@ export function createWidget(type: WIDGET_TYPES, position: {x: number, y: number
     minW: defaults.minW,
     minH: defaults.minH,
     config: {},
+    signals: [],
     createdAt: Date.now(),
     static: false,
   }

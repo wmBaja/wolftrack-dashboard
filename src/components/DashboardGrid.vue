@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, h, type Component, watch } from 'vue'
-import { GridLayout } from 'grid-layout-plus'
+import { GridLayout, GridItem } from 'grid-layout-plus'
 import { useWidgetStore } from '@/stores/widgetStore'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import BaseWidget from '@/components/widgets/BaseWidget.vue'
@@ -133,14 +133,20 @@ function handleGridContextMenu(event: MouseEvent) {
         :vertical-compact="false"
         @layout-updated="handleLayoutUpdate"
       >
-        <template #item="{ item }">
+        <GridItem
+          v-for="item in widgetStore.widgets"
+          :key="item.i"
+          v-bind="item"
+          drag-allow-from=".base-widget__header"
+          drag-ignore-from=".base-widget__content"
+        >
           <component
             :is="componentMap[(item as Widget).type] || BaseWidget"
             :ref="(el: WidgetExpose | null) => setWidgetRef(String(item.i), el)"
             :widget-id="item.i"
             :data-widget-id="item.i"
           />
-        </template>
+        </GridItem>
       </GridLayout>
     </div>
 

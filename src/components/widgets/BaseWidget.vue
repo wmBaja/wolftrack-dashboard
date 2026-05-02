@@ -189,18 +189,19 @@ defineExpose({ handleRefresh, startEditTitle, setLoading })
 .base-widget {
   background: var(--color-panel);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
   position: relative;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .base-widget:hover {
-  border-color: var(--color-accent);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
 }
 
 .base-widget--editing {
@@ -217,9 +218,9 @@ defineExpose({ handleRefresh, startEditTitle, setLoading })
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px 16px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-panel-header);
   flex-shrink: 0;
   min-height: 10px;
 }
