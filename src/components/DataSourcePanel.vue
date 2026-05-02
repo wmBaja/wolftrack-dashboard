@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
+import { useLiveDataStore } from '@/stores/liveDataStore'
 
 const dataSource = useDataSourceStore()
+const liveData = useLiveDataStore()
 
 const isOpen = ref(false)
 
@@ -42,6 +44,12 @@ function handleDbcFileChange(e: Event) {
 }
 
 async function applyAndStart() {
+  if (Object.keys(liveData.buffers).length > 0) {
+    const proceed = window.confirm("Starting a new session will clear existing data on the dashboard. Continue?")
+    if (!proceed) return
+    liveData.clearBuffers()
+  }
+
   await dataSource.applyConfig({
     source: sourceMode.value,
     log_file: sourceMode.value === 'logfile' ? logFilePath.value || null : null,

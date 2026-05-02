@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { useDataSourceStore } from './dataSourceStore'
 
 let backendPort: number | null = null;
 async function getVisualizerWsBase() {
@@ -46,7 +47,16 @@ export const useLiveDataStore = defineStore('liveData', () => {
 
     ws.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data) as SignalData[]
+        const payload = JSON.parse(event.data)
+        
+        if (!Array.isArray(payload)) {
+          if (payload.type === 'status') {
+            const dataSource = useDataSourceStore()
+            dataSource.status = payload.status
+          }
+          return
+        }
+
         for (const data of payload) {
           if (typeof data.value !== 'number') continue // Plottable data must be numbers
 
