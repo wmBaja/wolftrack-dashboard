@@ -7,6 +7,9 @@ on:
     branches: [ main, dev ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -25,15 +28,24 @@ jobs:
       # 2. Download the backend (Visualizer)
       - name: Determine Backend Tag
         id: backend-tag
-        run: echo "tag=${{ github.ref_name == 'main' && 'latest' || 'dev' }}" >> $GITHUB_ENV
+        run: echo "tag=${{ github.ref_name == 'main' && 'latest' || 'dev' }}" >> $GITHUB_OUTPUT
+        shell: bash
 
       - name: Download Backend Binary
+        shell: bash
         run: |
           mkdir -p dashboard/backend
+          TAG="${{ steps.backend-tag.outputs.tag }}"
+
+          if ! gh release view "$TAG" --repo wmBaja/wolftrack-visualizer > /dev/null 2>&1; then
+            echo "Error: Release '$TAG' not found in wmBaja/wolftrack-visualizer"
+            exit 1
+          fi
+
           if [ "${{ runner.os }}" == "Windows" ]; then
-            gh release download ${{ env.tag }} --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer.exe" --dir dashboard/backend
+            gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer.exe" --dir dashboard/backend
           else
-            gh release download ${{ env.tag }} --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer" --dir dashboard/backend
+            gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer" --dir dashboard/backend
             chmod +x dashboard/backend/wolftrack-visualizer
           fi
         env:
@@ -47,21 +59,34 @@ jobs:
 
       # 4. Inject Environment Variables into the bundled backend
       - name: Configure .env
+        shell: bash
+        env:
+          ZMQ_ENABLED: ${{ secrets.ZMQ_ENABLED }}
+          ZMQ_PORT: ${{ secrets.ZMQ_PORT }}
+          ZMQ_HOST: ${{ secrets.ZMQ_HOST }}
+          FASTAPI_HOST: ${{ secrets.FASTAPI_HOST }}
+          FASTAPI_PORT: ${{ secrets.FASTAPI_PORT }}
+          APP_LOG_DIR: ${{ secrets.APP_LOG_DIR }}
+          APP_LOG_LEVEL: ${{ secrets.APP_LOG_LEVEL }}
+          APP_LOG_TO_CONSOLE: ${{ secrets.APP_LOG_TO_CONSOLE }}
+          APP_LOG_TO_FILE: ${{ secrets.APP_LOG_TO_FILE }}
+          APP_LOG_MAX_FILE_SIZE_MB: ${{ secrets.APP_LOG_MAX_FILE_SIZE_MB }}
+          APP_LOG_BACKUP_COUNT: ${{ secrets.APP_LOG_BACKUP_COUNT }}
+          APP_LOG_FORMAT: ${{ secrets.APP_LOG_FORMAT }}
         run: |
           cd dashboard/backend
-          echo "ZMQ_ENABLED=${{ secrets.ZMQ_ENABLED || 'true' }}" >> .env
-          echo "ZMQ_PORT=${{ secrets.ZMQ_PORT || 5555 }}" >> .env
-          echo "ZMQ_HOST=${{ secrets.ZMQ_HOST || '127.0.0.1' }}" >> .env
-          echo "FASTAPI_HOST=${{ secrets.FASTAPI_HOST || '127.0.0.1' }}" >> .env
-          echo "FASTAPI_PORT=${{ secrets.FASTAPI_PORT || 0 }}" >> .env
-          echo "APP_LOG_DIR=${{ secrets.APP_LOG_DIR || './app_logs' }}" >> .env
-          echo "APP_LOG_LEVEL=${{ secrets.APP_LOG_LEVEL || 'INFO' }}" >> .env
-          echo "APP_LOG_TO_CONSOLE=${{ secrets.APP_LOG_TO_CONSOLE || 'true' }}" >> .env
-          echo "APP_LOG_TO_FILE=${{ secrets.APP_LOG_TO_FILE || 'true' }}" >> .env
-          echo "APP_LOG_MAX_FILE_SIZE_MB=${{ secrets.APP_LOG_MAX_FILE_SIZE_MB || 10 }}" >> .env
-          echo "APP_LOG_BACKUP_COUNT=${{ secrets.APP_LOG_BACKUP_COUNT || 5 }}" >> .env
-          echo "APP_LOG_FORMAT=${{ secrets.APP_LOG_FORMAT || 'detailed' }}" >> .env
-        shell: bash
+          echo "ZMQ_ENABLED=${ZMQ_ENABLED:-true}" >> .env
+          echo "ZMQ_PORT=${ZMQ_PORT:-5555}" >> .env
+          echo "ZMQ_HOST=${ZMQ_HOST:-127.0.0.1}" >> .env
+          echo "FASTAPI_HOST=${FASTAPI_HOST:-127.0.0.1}" >> .env
+          echo "FASTAPI_PORT=${FASTAPI_PORT:-0}" >> .env
+          echo "APP_LOG_DIR=${APP_LOG_DIR:-./app_logs}" >> .env
+          echo "APP_LOG_LEVEL=${APP_LOG_LEVEL:-INFO}" >> .env
+          echo "APP_LOG_TO_CONSOLE=${APP_LOG_TO_CONSOLE:-true}" >> .env
+          echo "APP_LOG_TO_FILE=${APP_LOG_TO_FILE:-true}" >> .env
+          echo "APP_LOG_MAX_FILE_SIZE_MB=${APP_LOG_MAX_FILE_SIZE_MB:-10}" >> .env
+          echo "APP_LOG_BACKUP_COUNT=${APP_LOG_BACKUP_COUNT:-5}" >> .env
+          echo "APP_LOG_FORMAT=${APP_LOG_FORMAT:-detailed}" >> .env
 
       # 6. Install Node dependencies and build the Electron app
       - name: Install Dashboard Dependencies
@@ -87,6 +112,7 @@ jobs:
             dashboard/release/*.dmg
             dashboard/release/*.AppImage
           retention-days: 7
+          if-no-files-found: error
 
   release:
     needs: build
@@ -94,17 +120,20 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-        
+        with:
+          path: artifacts
+
       - name: Set Release Tag
         id: tag
         run: echo "tag_name=${{ github.ref_name == 'main' && 'latest' || 'dev' }}" >> $GITHUB_OUTPUT
-        
+        shell: bash
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag_name }}
           prerelease: true
           files: |
-            wolftrack-app-ubuntu-latest/*.AppImage
-            wolftrack-app-windows-latest/*.exe
-            wolftrack-app-macos-latest/*.dmg
+            artifacts/wolftrack-app-ubuntu-latest/*.AppImage
+            artifacts/wolftrack-app-windows-latest/*.exe
+            artifacts/wolftrack-app-macos-latest/*.dmg
