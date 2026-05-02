@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -99,7 +99,7 @@ jobs:
         run: |
           cd dashboard
           npm run build
-          npx electron-builder
+          npx electron-builder --publish never
         shell: bash
 
       # 7. Upload the final built apps as Artifacts
@@ -113,27 +113,3 @@ jobs:
             dashboard/release/*.AppImage
           retention-days: 7
           if-no-files-found: error
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Set Release Tag
-        id: tag
-        run: echo "tag_name=${{ github.ref_name == 'main' && 'latest' || 'dev' }}" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag_name }}
-          prerelease: true
-          files: |
-            artifacts/wolftrack-app-ubuntu-latest/*.AppImage
-            artifacts/wolftrack-app-windows-latest/*.exe
-            artifacts/wolftrack-app-macos-latest/*.dmg
