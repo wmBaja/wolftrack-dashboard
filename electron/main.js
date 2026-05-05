@@ -3,6 +3,42 @@ import { spawn } from 'child_process'
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { fileURLToPath } from 'url'
 
+// ─── Discovery (stub) ────────────────────────────────────────────────────────
+// Auto-discovery via mDNS/bonjour is implemented here in Electron main process.
+// Browser builds cannot do network scanning or mDNS due to security restrictions.
+// This stub returns an empty array until a real discovery implementation is added.
+
+/**
+ * @typedef {Object} DiscoveryResult
+ * @property {string} ip
+ * @property {number} port
+ * @property {string} [name]
+ * @property {string} [model]
+ * @property {string} [serial]
+ */
+
+/**
+ * Discover DAQ devices on the local network.
+ * @returns {Promise<DiscoveryResult[]>}
+ */
+async function discoverDevices() {
+  // TODO: Implement mDNS/bonjour discovery using a library like 'bonjour-service'
+  // For now, attempt a simple HTTP health check on common DAQ ports on the local subnet
+  /** @type {DiscoveryResult[]} */
+  const results = []
+  const commonPorts = [5000, 8000, 8080, 80]
+
+  // Note: Network scanning from Electron main process is possible but may be slow.
+  // A more efficient approach would be server-side broadcast or mDNS.
+  // For now, return empty to avoid blocking the UI.
+  return results
+}
+
+// Register discovery IPC handler
+ipcMain.handle('discovery:discoverDevices', async () => {
+  return await discoverDevices()
+})
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -53,7 +89,7 @@ function startBackend() {
 
   let backendPath;
   const userDataPath = app.getPath('userData');
-  const backendEnv = { 
+  const backendEnv = {
     ...process.env,
     APP_LOG_DIR: path.join(userDataPath, 'backend_logs'),
     WOLFTRACK_USER_DATA: userDataPath

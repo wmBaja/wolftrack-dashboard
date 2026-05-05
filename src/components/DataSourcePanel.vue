@@ -1,30 +1,49 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import { useLiveDataStore } from '@/stores/liveDataStore'
+import { useConnectionStore } from '@/stores/connection'
 
 const dataSource = useDataSourceStore()
 const liveData = useLiveDataStore()
+const connection = useConnectionStore()
 
-const isOpen = ref(false)
+// Props and emits for panel open/close
+const props = defineProps<{ isOpen?: boolean }>()
+const emit = defineEmits<{ 'update:isOpen': [value: boolean] }>()
+
+const isOpen = computed({
+  get: () => props.isOpen ?? false,
+  set: (val: boolean) => emit('update:isOpen', val),
+})
 
 // Local draft state — only applied on submit
-const sourceMode = ref<'zmq' | 'logfile'>(dataSource.config.source)
-const logFilePath = ref<string>(dataSource.config.log_file ?? '')
-const dbcFilePath = ref<string>(dataSource.config.dbc_file ?? '')
-const playbackSpeed = ref<number>(dataSource.config.playback_speed ?? 1.0)
+const sourceMode = ref<'zmq' | 'logfile'>(connection.sourceMode === 'live' ? 'zmq' : 'logfile')
+const logFilePath = ref<string>(connection.filePath ?? '')
+const dbcFilePath = ref<string>('')
+const playbackSpeed = ref<number>(1.0)
 const logFileBlob = ref<File | null>(null)
 const dbcFileBlob = ref<File | null>(null)
+const discoverInProgress = ref(false)
+
+// Sync local draft when connection store changes
+watch(() => connection.sourceMode, (mode) => {
+  sourceMode.value = mode === 'live' ? 'zmq' : 'logfile'
+})
+
+watch(() => connection.filePath, (path) => {
+  logFilePath.value = path ?? ''
+})
 
 function openPanel() {
   // Sync draft with current live config
-  sourceMode.value = dataSource.config.source
-  logFilePath.value = dataSource.config.log_file ?? ''
-  dbcFilePath.value = dataSource.config.dbc_file ?? ''
-  playbackSpeed.value = dataSource.config.playback_speed ?? 1.0
+  sourceMode.value = connection.sourceMode === 'live' ? 'zmq' : 'logfile'
+  logFilePath.value = connection.filePath ?? ''
+  dbcFilePath.value = ''
+  playbackSpeed.value = 1.0
   logFileBlob.value = null
   dbcFileBlob.value = null
-  isOpen.value = true
+  emit('update:isOpen', true)
 }
 
 function handleLogFileChange(e: Event) {
@@ -67,28 +86,136 @@ async function applyAndStart() {
 
 async function stopDataSource() {
   await dataSource.stop()
-  isOpen.value = false
+  emit('update:isOpen', false)
 }
 
+async function handleConnect() {
+  // Sync connection store values to local inputs
+  connection.ip = ipInput.value || connection.ip
+  connection.port = Number(portInput.value) || connection.port
+
+  await connection.connect()
+  if (connection.status !== 'error') {
+    emit('update:isOpen', false)
+  }
+}
+
+async function handleDisconnect() {
+  connection.disconnect()
+  emit('update:isOpen', false)
+}
+
+async function handleDiscover() {
+  discoverInProgress.value = true
+  try {
+    await connection.discover()
+  } finally {
+    discoverInProgress.value = false
+  }
+}
+
+// Local inputs for IP/port (live mode)
+const ipInput = ref(connection.ip)
+const portInput = ref(String(connection.port))
+
+// Keep local inputs in sync with connection store
+watch(() => connection.ip, (val) => { ipInput.value = val })
+watch(() => connection.port, (val) => { portInput.value = String(val) })
+
+// Validation errors
+const ipError = computed(() => {
+  if (sourceMode.value === 'zmq') {
+    const err = validateIp(ipInput.value)
+    return err
+  }
+  return null
+})
+
+const portError = computed(() => {
+  if (sourceMode.value === 'zmq') {
+    const err = validatePort(Number(portInput.value))
+    return err
+  }
+  return null
+})
+
+const canConnect = computed(() => {
+  if (sourceMode.value === 'logfile') {
+    return !!logFilePath.value
+  }
+  return !ipError.value && !portError.value && connection.status !== 'connecting'
+})
+
 const statusColor = computed(() => {
+  // Prefer connection store status for live mode
+  if (connection.sourceMode === 'live') {
+    switch (connection.status) {
+      case 'connected': return 'var(--color-success)'
+      case 'connecting': return 'var(--color-warning)'
+      case 'error': return 'var(--color-danger)'
+      default: return 'var(--color-muted)'
+    }
+  }
+  // File mode
   switch (dataSource.status) {
     case 'running': return 'var(--color-success)'
     case 'loading': return 'var(--color-warning)'
-    case 'error':   return 'var(--color-danger)'
-    default:        return 'var(--color-muted)'
+    case 'error': return 'var(--color-danger)'
+    default: return 'var(--color-muted)'
   }
 })
 
 const statusLabel = computed(() => {
+  if (connection.sourceMode === 'live') {
+    switch (connection.status) {
+      case 'connected': return 'Connected'
+      case 'connecting': return 'Connecting…'
+      case 'error': return 'Error'
+      default: return 'Disconnected'
+    }
+  }
   switch (dataSource.status) {
     case 'running': return 'Running'
     case 'loading': return 'Loading…'
-    case 'error':   return 'Error'
-    default:        return 'Stopped'
+    case 'error': return 'Error'
+    default: return 'Stopped'
   }
 })
 
 const isLoading = computed(() => dataSource.status === 'loading')
+
+// ─── Validation helpers (duplicated from connection store for local use) ────
+
+const IPv4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/
+
+function validateIp(ip: string): string | null {
+  if (!ip || ip.trim().length === 0) return 'IP address is required'
+  if (IPv4_REGEX.test(ip)) {
+    const parts = ip.split('.').map(Number)
+    if (parts.some((n) => n > 255)) return 'Invalid IP octet (>255)'
+  }
+  if (/^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$/.test(ip) || /^[a-zA-Z0-9]$/.test(ip)) {
+    return null
+  }
+  return 'Invalid IP address or hostname'
+}
+
+function validatePort(port: number): string | null {
+  if (!Number.isInteger(port)) return 'Port must be an integer'
+  if (port < 1 || port > 65535) return 'Port must be between 1 and 65535'
+  return null
+}
+
+// Format last seen timestamp
+function formatLastSeen(): string {
+  if (!connection.lastSeen) return ''
+  try {
+    const date = new Date(connection.lastSeen)
+    return date.toLocaleString()
+  } catch {
+    return ''
+  }
+}
 </script>
 
 <template>
@@ -151,6 +278,81 @@ const isLoading = computed(() => dataSource.status === 'loading')
           </button>
         </div>
       </div>
+
+      <!-- Live mode connection controls -->
+      <Transition name="fade">
+        <div v-if="sourceMode === 'zmq'" class="field-group">
+          <label class="field-label" for="ip-input">
+            DAQ Address
+            <span class="optional">IP or hostname</span>
+          </label>
+          <div class="connection-inputs">
+            <input
+              id="ip-input"
+              class="connection-input"
+              type="text"
+              v-model="ipInput"
+              placeholder="127.0.0.1"
+            />
+            <input
+              id="port-input"
+              class="connection-input port-input"
+              type="number"
+              v-model="portInput"
+              placeholder="5000"
+              min="1"
+              max="65535"
+            />
+          </div>
+          <Transition name="fade">
+            <p v-if="ipError" class="validation-error">{{ ipError }}</p>
+          </Transition>
+          <Transition name="fade">
+            <p v-if="portError" class="validation-error">{{ portError }}</p>
+          </Transition>
+          <div class="connection-actions">
+            <button
+              id="discover-btn"
+              class="action-btn secondary"
+              @click="handleDiscover"
+              :disabled="discoverInProgress || connection.isConnecting"
+            >
+              <svg v-if="discoverInProgress" class="spinner" viewBox="0 0 24 24" fill="none" width="14" height="14">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="32" stroke-linecap="round" />
+              </svg>
+              {{ discoverInProgress ? 'Discovering…' : 'Discover' }}
+            </button>
+            <div class="connection-actions-right">
+              <button
+                v-if="connection.isIdle || connection.isError"
+                id="connect-btn"
+                class="action-btn primary"
+                @click="handleConnect"
+                :disabled="!canConnect || connection.isConnecting"
+              >
+                {{ connection.isConnecting ? 'Connecting…' : 'Connect' }}
+              </button>
+              <button
+                v-if="connection.isConnected"
+                id="disconnect-btn"
+                class="action-btn danger"
+                @click="handleDisconnect"
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+          <Transition name="fade">
+            <p v-if="connection.lastSeen" class="last-seen">Last seen: {{ formatLastSeen() }}</p>
+          </Transition>
+          <Transition name="fade">
+            <div v-if="connection.errorMessage" class="error-banner">
+              <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
+              {{ connection.errorMessage }}
+            </div>
+          </Transition>
+        </div>
+      </Transition>
 
       <!-- Log file picker (only for logfile mode) -->
       <Transition name="fade">
@@ -394,6 +596,50 @@ const isLoading = computed(() => dataSource.status === 'loading')
   background: var(--color-blue-bg-glow);
   border-color: var(--color-blue-border);
   color: var(--color-blue-text);
+}
+
+/* Live mode connection controls */
+.connection-inputs {
+  display: flex;
+  gap: 8px;
+}
+.connection-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 11px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--color-text);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  transition: border-color 0.15s;
+}
+.connection-input::placeholder { color: var(--color-muted); font-family: inherit; }
+.connection-input:focus { outline: none; border-color: var(--color-accent); }
+.port-input { flex: 0 0 90px; }
+.connection-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.connection-actions-right {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.validation-error {
+  font-size: 11px;
+  color: var(--color-danger-text);
+  margin: 0;
+  line-height: 1.4;
+}
+.last-seen {
+  font-size: 11px;
+  color: var(--color-muted);
+  margin: 0;
+  opacity: 0.7;
 }
 
 /* File pickers */

@@ -6,12 +6,17 @@ import '@imengyu/vue3-context-menu/lib/vue3-context-menu.css'
 import App from './App.vue'
 import router from './router'
 import './main.css'
+import { useConnectionStore } from './stores/connection'
 
 const app = createApp(App)
-
-app.use(createPinia())
+const pinia = createPinia()
+app.use(pinia)
 app.use(router)
 app.use(ContextMenu)
+
+// Initialize connection store (loads from localStorage)
+const connection = useConnectionStore()
+connection.init()
 
 app.mount('#app')
 

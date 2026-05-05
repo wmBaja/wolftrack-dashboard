@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   openFile: (filters) => ipcRenderer.invoke('dialog:openFile', filters),
   getBackendPort: () => ipcRenderer.invoke('get-backend-port'),
+  discoverDevices: () => ipcRenderer.invoke('discovery:discoverDevices'),
 })
