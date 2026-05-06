@@ -20,8 +20,14 @@ export interface DbcSignal {
   unit: string
 }
 
+export interface DbcFileInfo {
+  name: string
+  size: number
+  mtime: number
+}
+
 export const useDbcStore = defineStore('dbcStore', () => {
-  const availableDbcs = ref<string[]>([])
+  const availableDbcs = ref<DbcFileInfo[]>([])
   const activeDbc = ref<string | null>(null)
   const signals = ref<DbcSignal[]>([])
   const isLoading = ref(false)

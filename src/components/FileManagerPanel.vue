@@ -7,9 +7,11 @@ const dbcStore = useDbcStore()
 const isOpen = ref(false)
 const activeTab = ref<'logs' | 'dbc'>('dbc')
 
-function openPanel() {
-  isOpen.value = true
-  dbcStore.fetchDbcs()
+function togglePanel() {
+  isOpen.value = !isOpen.value
+  if (isOpen.value) {
+    dbcStore.fetchDbcs()
+  }
 }
 
 // DBC Tab logic
@@ -28,7 +30,21 @@ function deleteDbc(filename: string) {
   dbcStore.deleteDbc(filename)
 }
 
-defineExpose({ openPanel })
+defineExpose({ togglePanel })
+
+function formatSize(bytes: number) {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+function formatDate(timestamp: number) {
+  return new Date(timestamp * 1000).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric'
+  })
+}
 
 onMounted(() => {
   dbcStore.fetchDbcs()
@@ -92,15 +108,18 @@ onMounted(() => {
             </div>
             <div
               v-for="filename in dbcStore.availableDbcs"
-              :key="filename"
+              :key="filename.name"
               class="file-item"
-              :class="{ 'is-active': dbcStore.activeDbc === filename }"
+              :class="{ 'is-active': dbcStore.activeDbc === filename.name }"
             >
-              <div class="file-info" @click="selectDbc(filename)">
+              <div class="file-info" @click="selectDbc(filename.name)">
                 <span class="status-indicator"></span>
-                <span class="filename">{{ filename }}</span>
+                <div class="file-details">
+                  <span class="filename">{{ filename.name }}</span>
+                  <span class="file-stats">{{ formatSize(filename.size) }} &bull; {{ formatDate(filename.mtime) }}</span>
+                </div>
               </div>
-              <button class="delete-btn" @click.stop="deleteDbc(filename)" title="Delete">
+              <button class="delete-btn" @click.stop="deleteDbc(filename.name)" title="Delete">
                 <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                   <path fill-rule="evenodd" d="M9 2a1 1 0 0 0-.894.553L7.382 4H4a1 1 0 0 0 0 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a1 1 0 1 0 0-2h-3.382l-.724-1.447A1 1 0 0 0 11 2H9zM7 8a1 1 0 0 1 2 0v6a1 1 0 1 1-2 0V8zm5-1a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1z" clip-rule="evenodd" />
                 </svg>
@@ -124,7 +143,7 @@ onMounted(() => {
   top: var(--navbar-height);
   left: 0;
   bottom: 0;
-  width: 320px;
+  width: 350px;
   background: var(--color-panel);
   border-right: 1px solid var(--color-border);
   z-index: 60;
@@ -137,8 +156,8 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 6px 20px;
+  border-bottom: 2px solid var(--color-border);
 }
 
 .drawer-title {
@@ -172,13 +191,13 @@ onMounted(() => {
 
 .tab-btn {
   flex: 1;
-  padding: 12px 0;
+  padding: 8px 0;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--color-muted);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -260,6 +279,26 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.filename {
+  font-size: 13px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-details {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.file-stats {
+  font-size: 10px;
+  color: var(--color-muted);
+  margin-top: 1px;
+}
+
 .status-indicator {
   width: 8px;
   height: 8px;
@@ -267,14 +306,6 @@ onMounted(() => {
   background: var(--color-muted);
   flex-shrink: 0;
   transition: all 0.3s;
-}
-
-.filename {
-  font-size: 13px;
-  color: var(--color-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .delete-btn {
