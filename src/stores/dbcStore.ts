@@ -35,8 +35,8 @@ export const useDbcStore = defineStore('dbcStore', () => {
       const data = await res.json()
       availableDbcs.value = data.available
       activeDbc.value = data.active
-    } catch (e: any) {
-      error.value = e.message
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
     }
   }
 
@@ -47,8 +47,8 @@ export const useDbcStore = defineStore('dbcStore', () => {
       if (!res.ok) throw new Error('Failed to fetch signals')
       const data = await res.json()
       signals.value = data.signals || []
-    } catch (e: any) {
-      error.value = e.message
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
     }
   }
 
@@ -71,8 +71,8 @@ export const useDbcStore = defineStore('dbcStore', () => {
       
       await fetchDbcs()
       await fetchSignals()
-    } catch (e: any) {
-      error.value = e.message
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
     } finally {
       isLoading.value = false
     }
@@ -97,8 +97,8 @@ export const useDbcStore = defineStore('dbcStore', () => {
       
       await fetchDbcs()
       await fetchSignals()
-    } catch (e: any) {
-      error.value = e.message
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
     } finally {
       isLoading.value = false
     }
@@ -119,8 +119,8 @@ export const useDbcStore = defineStore('dbcStore', () => {
       
       await fetchDbcs()
       await fetchSignals()
-    } catch (e: any) {
-      error.value = e.message
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
     } finally {
       isLoading.value = false
     }

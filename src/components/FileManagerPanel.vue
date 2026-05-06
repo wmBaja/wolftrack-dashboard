@@ -32,6 +32,7 @@ defineExpose({ openPanel })
 
 onMounted(() => {
   dbcStore.fetchDbcs()
+  dbcStore.fetchSignals()
 })
 </script>
 
