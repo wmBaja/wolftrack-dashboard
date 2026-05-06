@@ -8,7 +8,6 @@ export type DataSourceStatus = 'stopped' | 'running' | 'loading' | 'error'
 export interface DataSourceConfig {
   source: DataSourceMode
   log_file: string | null
-  dbc_file: string | null
   playback_speed: number
 }
 
@@ -42,7 +41,6 @@ export const useDataSourceStore = defineStore('dataSource', () => {
   const config = ref<DataSourceConfig>({
     source: 'zmq',
     log_file: null,
-    dbc_file: null,
     playback_speed: 1.0,
   })
 
@@ -104,27 +102,21 @@ export const useDataSourceStore = defineStore('dataSource', () => {
 
   async function applyConfig(
     update: Partial<DataSourceConfig>,
-    files?: { logFileBlob: File | null; dbcFileBlob: File | null }
+    files?: { logFileBlob: File | null }
   ): Promise<void> {
     status.value = 'loading'
     error.value = null
     try {
       const payload = { ...config.value, ...update }
-      
+
       const formData = new FormData()
       formData.append('source', payload.source)
       formData.append('playback_speed', payload.playback_speed.toString())
-      
+
       if (files?.logFileBlob) {
         formData.append('log_file_upload', files.logFileBlob)
       } else if (payload.log_file) {
         formData.append('existing_log', payload.log_file)
-      }
-
-      if (files?.dbcFileBlob) {
-        formData.append('dbc_file_upload', files.dbcFileBlob)
-      } else if (payload.dbc_file) {
-        formData.append('existing_dbc', payload.dbc_file)
       }
 
       const baseUrl = await getVisualizerBase()
@@ -132,7 +124,7 @@ export const useDataSourceStore = defineStore('dataSource', () => {
         method: 'POST',
         body: formData,
       })
-      
+
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail ?? 'Unknown error')
       config.value = payload

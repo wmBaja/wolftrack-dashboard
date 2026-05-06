@@ -3,7 +3,7 @@ import { ref, computed, h } from 'vue'
 import BaseWidget from '@/components/widgets/BaseWidget.vue'
 import UplotChart from '@/components/UplotChart.vue'
 import { useWidgetStore } from '@/stores/widgetStore'
-import { useDataSourceStore } from '@/stores/dataSourceStore'
+import { useDbcStore } from '@/stores/dbcStore'
 import { useLiveDataStore } from '@/stores/liveDataStore'
 import type { MenuOptions } from '@imengyu/vue3-context-menu'
 import type { AlignedData } from 'uplot'
@@ -13,7 +13,7 @@ const props = defineProps<{
 }>()
 
 const widgetStore = useWidgetStore()
-const dataStore = useDataSourceStore()
+const dbcStore = useDbcStore()
 const liveDataStore = useLiveDataStore()
 
 const baseWidgetRef = ref<InstanceType<typeof BaseWidget>>()
@@ -138,7 +138,7 @@ defineExpose({ handleRefresh, startEditTitle })
         </div>
         <select @change="addSignal" class="signal-select">
           <option value="">-- Add Signal --</option>
-          <option v-for="sig in dataStore.dbcSignals" :key="sig.id" :value="sig.id">
+          <option v-for="sig in dbcStore.signals" :key="sig.id" :value="sig.id">
             {{ sig.message }} :: {{ sig.name }}
           </option>
         </select>

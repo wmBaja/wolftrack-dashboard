@@ -11,17 +11,14 @@ const liveData = useLiveDataStore()
 const isOpen = ref(false)
 const sourceMode = ref<'zmq' | 'logfile'>(dataSource.config.source)
 const logFilePath = ref<string>(dataSource.config.log_file ?? '')
-const dbcFilePath = ref<string>(dataSource.config.dbc_file ?? '')
 const playbackSpeed = ref<number>(dataSource.config.playback_speed ?? 1.0)
 const daqHost = ref<string>(daqConnection.target.host)
 const daqPort = ref<number>(daqConnection.target.port || 5000)
 const logFileBlob = ref<File | null>(null)
-const dbcFileBlob = ref<File | null>(null)
 
 function syncDraftState() {
   sourceMode.value = dataSource.config.source
   logFilePath.value = dataSource.config.log_file ?? ''
-  dbcFilePath.value = dataSource.config.dbc_file ?? ''
   playbackSpeed.value = dataSource.config.playback_speed ?? 1.0
   daqHost.value = daqConnection.target.host
   daqPort.value = daqConnection.target.port || 5000
