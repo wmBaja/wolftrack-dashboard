@@ -25,7 +25,7 @@ jobs:
       # 2. Download the backend (Visualizer)
       - name: Determine Backend Tag
         id: backend-tag
-        run: echo "tag=${{ github.ref_name == 'main' && 'latest' || 'dev' }}" >> $GITHUB_OUTPUT
+        run: echo "tag=${ 'nightly' }" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Download Backend Binary
