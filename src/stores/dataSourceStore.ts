@@ -19,7 +19,6 @@ export type DataSourceStatus = 'stopped' | 'running' | 'loading' | 'error'
 export interface DataSourceConfig {
   source: DataSourceMode
   log_file: string | null
-  dbc_file: string | null
   playback_speed: number
 }
 
@@ -29,23 +28,8 @@ export const useDataSourceStore = defineStore('dataSource', () => {
   const config = ref<DataSourceConfig>({
     source: 'zmq',
     log_file: null,
-    dbc_file: null,
     playback_speed: 1.0,
   })
-
-  const dbcSignals = ref<{ id: string, message: string, name: string, unit: string }[]>([])
-
-  async function fetchSignals(): Promise<void> {
-    try {
-      const baseUrl = await getVisualizerBase()
-      const res = await fetch(`${baseUrl}/api/signals`)
-      if (!res.ok) return
-      const data = await res.json()
-      dbcSignals.value = data.signals || []
-    } catch (e) {
-      console.error('Failed to fetch signals', e)
-    }
-  }
 
   async function fetchConfig(): Promise<void> {
     try {
@@ -55,7 +39,6 @@ export const useDataSourceStore = defineStore('dataSource', () => {
       const data = await res.json()
       config.value = data
       status.value = 'running'
-      await fetchSignals()
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)
       status.value = 'error'
@@ -64,7 +47,7 @@ export const useDataSourceStore = defineStore('dataSource', () => {
 
   async function applyConfig(
     update: Partial<DataSourceConfig>,
-    files?: { logFileBlob: File | null; dbcFileBlob: File | null }
+    files?: { logFileBlob: File | null }
   ): Promise<void> {
     status.value = 'loading'
     error.value = null
@@ -81,12 +64,6 @@ export const useDataSourceStore = defineStore('dataSource', () => {
         formData.append('existing_log', payload.log_file)
       }
 
-      if (files?.dbcFileBlob) {
-        formData.append('dbc_file_upload', files.dbcFileBlob)
-      } else if (payload.dbc_file) {
-        formData.append('existing_dbc', payload.dbc_file)
-      }
-
       const baseUrl = await getVisualizerBase()
       const res = await fetch(`${baseUrl}/api/upload_config`, {
         method: 'POST',
@@ -97,7 +74,6 @@ export const useDataSourceStore = defineStore('dataSource', () => {
       if (!res.ok) throw new Error(data.detail ?? 'Unknown error')
       config.value = payload
       status.value = 'running'
-      await fetchSignals()
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)
       status.value = 'error'
@@ -117,5 +93,5 @@ export const useDataSourceStore = defineStore('dataSource', () => {
     }
   }
 
-  return { status, error, config, dbcSignals, fetchConfig, applyConfig, stop, fetchSignals }
+  return { status, error, config, fetchConfig, applyConfig, stop }
 })

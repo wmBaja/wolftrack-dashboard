@@ -11,19 +11,15 @@ const isOpen = ref(false)
 // Local draft state — only applied on submit
 const sourceMode = ref<'zmq' | 'logfile'>(dataSource.config.source)
 const logFilePath = ref<string>(dataSource.config.log_file ?? '')
-const dbcFilePath = ref<string>(dataSource.config.dbc_file ?? '')
 const playbackSpeed = ref<number>(dataSource.config.playback_speed ?? 1.0)
 const logFileBlob = ref<File | null>(null)
-const dbcFileBlob = ref<File | null>(null)
 
 function openPanel() {
   // Sync draft with current live config
   sourceMode.value = dataSource.config.source
   logFilePath.value = dataSource.config.log_file ?? ''
-  dbcFilePath.value = dataSource.config.dbc_file ?? ''
   playbackSpeed.value = dataSource.config.playback_speed ?? 1.0
   logFileBlob.value = null
-  dbcFileBlob.value = null
   isOpen.value = true
 }
 
@@ -35,13 +31,7 @@ function handleLogFileChange(e: Event) {
   }
 }
 
-function handleDbcFileChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    dbcFileBlob.value = file
-    dbcFilePath.value = file.name
-  }
-}
+
 
 async function applyAndStart() {
   if (Object.keys(liveData.buffers).length > 0) {
@@ -53,11 +43,9 @@ async function applyAndStart() {
   await dataSource.applyConfig({
     source: sourceMode.value,
     log_file: sourceMode.value === 'logfile' ? logFilePath.value || null : null,
-    dbc_file: dbcFilePath.value || null,
     playback_speed: playbackSpeed.value,
   }, {
-    logFileBlob: logFileBlob.value,
-    dbcFileBlob: dbcFileBlob.value
+    logFileBlob: logFileBlob.value
   })
 
   if (dataSource.status !== 'error') {
@@ -172,29 +160,7 @@ const isLoading = computed(() => dataSource.status === 'loading')
         </div>
       </Transition>
 
-      <!-- DBC file picker -->
-      <div class="field-group">
-        <label class="field-label" for="dbcfile-input">
-          DBC File
-          <span class="optional">(optional — uses default if omitted)</span>
-        </label>
-        <div class="file-picker-row">
-          <input
-            id="dbcfile-input"
-            class="file-path-input"
-            type="text"
-            v-model="dbcFilePath"
-            placeholder="Upload a DBC file (optional)"
-          />
-          <div class="browse-btn-group">
-            <div class="browse-btn-wrapper">
-              <button id="dbcfile-browse-btn" class="browse-btn" type="button">Browse…</button>
-              <input type="file" accept=".dbc" @change="handleDbcFileChange" class="browse-input-overlay" />
-            </div>
-            <button v-if="dbcFilePath" id="dbcfile-clear-btn" class="clear-btn" @click="dbcFilePath = ''; dbcFileBlob = null" title="Clear">✕</button>
-          </div>
-        </div>
-      </div>
+
 
       <!-- Playback speed (only for logfile) -->
       <Transition name="fade">
