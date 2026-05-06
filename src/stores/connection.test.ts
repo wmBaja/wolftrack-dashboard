@@ -81,7 +81,8 @@ describe('Connection Store', () => {
     it('should load defaults from localStorage when empty', () => {
       const store = useConnectionStore()
       expect(store.ip).toBe('127.0.0.1')
-      expect(store.port).toBe(5000)
+      expect(store.port).toBe(5500)
+      expect(store.zmqPort).toBeNull()
       expect(store.sourceMode).toBe('live')
       expect(store.status).toBe('idle')
     })
@@ -90,11 +91,13 @@ describe('Connection Store', () => {
       mockStorageData['wolftrack-connection'] = JSON.stringify({
         ip: '192.168.1.100',
         port: 8080,
+        zmqPort: 5555,
         sourceMode: 'live',
       })
       const store = useConnectionStore()
       expect(store.ip).toBe('192.168.1.100')
       expect(store.port).toBe(8080)
+      expect(store.zmqPort).toBe(5555)
       expect(store.sourceMode).toBe('live')
     })
 

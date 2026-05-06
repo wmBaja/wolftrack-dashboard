@@ -299,11 +299,17 @@ function formatLastSeen(): string {
               class="connection-input port-input"
               type="number"
               v-model="portInput"
-              placeholder="5000"
+              placeholder="5500"
               min="1"
               max="65535"
             />
           </div>
+          <!-- Discovered ZMQ port info -->
+          <Transition name="fade">
+            <p v-if="connection.isConnected && connection.zmqPort" class="zmq-port-info">
+              ZMQ Stream: tcp://{{ ipInput || connection.ip }}:{{ connection.zmqPort }}
+            </p>
+          </Transition>
           <Transition name="fade">
             <p v-if="ipError" class="validation-error">{{ ipError }}</p>
           </Transition>
@@ -640,6 +646,13 @@ function formatLastSeen(): string {
   color: var(--color-muted);
   margin: 0;
   opacity: 0.7;
+}
+.zmq-port-info {
+  font-size: 11px;
+  color: var(--color-muted);
+  margin: 0;
+  opacity: 0.8;
+  font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
 /* File pickers */

@@ -11,6 +11,7 @@ export interface ConnectionState {
   sourceMode: SourceMode
   ip: string
   port: number
+  zmqPort: number | null
   filePath: string | null
   lastSeen: string | null
   errorMessage: string | null
@@ -21,6 +22,7 @@ export interface HealthResponse {
   status: string
   name?: string
   version?: string
+  zmq_port?: number
 }
 
 export interface InfoResponse {
@@ -42,7 +44,7 @@ export interface DiscoveryResult {
 
 const STORAGE_KEY = 'wolftrack-connection'
 const DEFAULT_IP = '127.0.0.1'
-const DEFAULT_PORT = 5000
+const DEFAULT_PORT = 5500
 const PING_INTERVAL_MS = 5000
 const PING_TIMEOUT_MS = 3000
 const MAX_ERROR_COUNT = 3
@@ -51,23 +53,24 @@ const INITIAL_RETRY_DELAY_MS = 1000
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function loadFromStorage(): { ip: string; port: number; sourceMode: SourceMode } {
+function loadFromStorage(): { ip: string; port: number; zmqPort: number | null; sourceMode: SourceMode } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       const ip = typeof parsed.ip === 'string' && parsed.ip.length > 0 ? parsed.ip : DEFAULT_IP
       const port = typeof parsed.port === 'number' && parsed.port >= 1 && parsed.port <= 65535 ? parsed.port : DEFAULT_PORT
+      const zmqPort = typeof parsed.zmqPort === 'number' ? parsed.zmqPort : null
       const sourceMode = parsed.sourceMode === 'live' || parsed.sourceMode === 'file' ? parsed.sourceMode : 'live'
-      return { ip, port, sourceMode }
+      return { ip, port, zmqPort, sourceMode }
     }
   } catch {
     // ignore
   }
-  return { ip: DEFAULT_IP, port: DEFAULT_PORT, sourceMode: 'live' }
+  return { ip: DEFAULT_IP, port: DEFAULT_PORT, zmqPort: null, sourceMode: 'live' }
 }
 
-function saveToStorage(state: { ip: string; port: number; sourceMode: SourceMode }) {
+function saveToStorage(state: { ip: string; port: number; zmqPort: number | null; sourceMode: SourceMode }) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   } catch {
@@ -143,6 +146,7 @@ export const useConnectionStore = defineStore('connection', () => {
   const sourceMode = ref<SourceMode>(storedDefaults.sourceMode)
   const ip = ref<string>(storedDefaults.ip)
   const port = ref<number>(storedDefaults.port)
+  const zmqPort = ref<number | null>(storedDefaults.zmqPort)
   const filePath = ref<string | null>(null)
   const lastSeen = ref<string | null>(null)
   const errorMessage = ref<string | null>(null)
@@ -195,7 +199,7 @@ export const useConnectionStore = defineStore('connection', () => {
   function setSourceMode(mode: SourceMode) {
     sourceMode.value = mode
     logConnectionEvent({ type: 'source_mode_change', mode })
-    saveToStorage({ ip: ip.value, port: port.value, sourceMode: mode })
+    saveToStorage({ ip: ip.value, port: port.value, zmqPort: zmqPort.value, sourceMode: mode })
 
     // If switching to file mode, reset to connected
     if (mode === 'file') {
@@ -243,7 +247,7 @@ export const useConnectionStore = defineStore('connection', () => {
     }
 
     status.value = 'connecting'
-    saveToStorage({ ip: currentIp, port: currentPort, sourceMode: sourceMode.value })
+    saveToStorage({ ip: currentIp, port: currentPort, zmqPort: zmqPort.value, sourceMode: sourceMode.value })
     logConnectionEvent({ type: 'connect_attempt', ip: currentIp, port: currentPort })
 
     try {
@@ -258,10 +262,15 @@ export const useConnectionStore = defineStore('connection', () => {
         throw new Error(`Health check failed: ${res.status} ${res.statusText}`)
       }
 
-      const data: HealthResponse = await res.json()
+      const data: HealthResponse & { zmq_port?: number } = await res.json()
 
       if (data.status !== 'ok' && data.status !== 'healthy') {
         throw new Error(`DAQ reported unhealthy status: ${data.status}`)
+      }
+
+      // Extract ZMQ port from health response if provided
+      if (data.zmq_port != null) {
+        zmqPort.value = data.zmq_port
       }
 
       status.value = 'connected'
@@ -302,6 +311,12 @@ export const useConnectionStore = defineStore('connection', () => {
 
       if (!res.ok) {
         throw new Error(`Ping failed: ${res.status}`)
+      }
+
+      // Also check for zmq_port update during ping (edge case: port changed)
+      const data = await res.json()
+      if (data.zmq_port != null) {
+        zmqPort.value = data.zmq_port
       }
 
       const latency = Math.round(performance.now() - start)
@@ -345,7 +360,7 @@ export const useConnectionStore = defineStore('connection', () => {
         const first = results[0]!
         ip.value = first.ip
         port.value = first.port
-        saveToStorage({ ip: first.ip, port: first.port, sourceMode: 'live' })
+        saveToStorage({ ip: first.ip, port: first.port, zmqPort: zmqPort.value, sourceMode: 'live' })
       }
 
       return results
@@ -404,6 +419,7 @@ export const useConnectionStore = defineStore('connection', () => {
     const loaded = loadFromStorage()
     ip.value = loaded.ip
     port.value = loaded.port
+    zmqPort.value = loaded.zmqPort
     sourceMode.value = loaded.sourceMode
 
     // If last mode was file and we have a path, auto-connect
@@ -421,6 +437,7 @@ export const useConnectionStore = defineStore('connection', () => {
     sourceMode,
     ip,
     port,
+    zmqPort,
     filePath,
     lastSeen,
     errorMessage,
