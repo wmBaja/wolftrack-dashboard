@@ -8,6 +8,7 @@ export type DataSourceStatus = 'stopped' | 'running' | 'loading' | 'error'
 export interface DataSourceConfig {
   source: DataSourceMode
   log_file: string | null
+  dbc_file: string | null
   playback_speed: number
 }
 
@@ -41,6 +42,7 @@ export const useDataSourceStore = defineStore('dataSource', () => {
   const config = ref<DataSourceConfig>({
     source: 'zmq',
     log_file: null,
+    dbc_file: null,
     playback_speed: 1.0,
   })
 

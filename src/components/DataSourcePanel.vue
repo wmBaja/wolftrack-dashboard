@@ -2,10 +2,12 @@
 import { computed, ref } from 'vue'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import { useDaqConnectionStore, type DaqTarget } from '@/stores/daqConnectionStore'
+import { useDbcStore } from '@/stores/dbcStore'
 import { useLiveDataStore } from '@/stores/liveDataStore'
 
 const dataSource = useDataSourceStore()
 const daqConnection = useDaqConnectionStore()
+const dbcStore = useDbcStore()
 const liveData = useLiveDataStore()
 
 const isOpen = ref(false)
@@ -23,11 +25,11 @@ function syncDraftState() {
   daqHost.value = daqConnection.target.host
   daqPort.value = daqConnection.target.port || 5000
   logFileBlob.value = null
-  dbcFileBlob.value = null
 }
 
 function openPanel() {
   syncDraftState()
+  dbcStore.fetchDbcs()
   isOpen.value = true
 }
 
@@ -37,14 +39,6 @@ function handleLogFileChange(event: Event) {
 
   logFileBlob.value = file
   logFilePath.value = file.name
-}
-
-function handleDbcFileChange(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
-
-  dbcFileBlob.value = file
-  dbcFilePath.value = file.name
 }
 
 function syncDaqTargetDraft() {
@@ -71,16 +65,15 @@ async function applyLogfileConfig() {
     {
       source: 'logfile',
       log_file: logFilePath.value || null,
-      dbc_file: dbcFilePath.value || null,
       playback_speed: playbackSpeed.value,
     },
     {
       logFileBlob: logFileBlob.value,
-      dbcFileBlob: dbcFileBlob.value,
     },
   )
 
   if (dataSource.status !== 'error') {
+    await dbcStore.fetchSignals()
     isOpen.value = false
   }
 }
@@ -94,12 +87,10 @@ async function connectToDaq() {
     {
       source: 'zmq',
       log_file: null,
-      dbc_file: dbcFilePath.value || null,
       playback_speed: 1.0,
     },
     {
       logFileBlob: null,
-      dbcFileBlob: dbcFileBlob.value,
     },
   )
 
@@ -107,6 +98,7 @@ async function connectToDaq() {
 
   const connected = await daqConnection.connect()
   if (connected) {
+    await dbcStore.fetchSignals()
     isOpen.value = false
   }
 }
@@ -181,6 +173,8 @@ const healthSummary = computed(() => {
     dbc: health.dbc_loaded ? 'loaded' : 'missing',
   }
 })
+
+const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 </script>
 
 <template>
@@ -327,25 +321,10 @@ const healthSummary = computed(() => {
       </Transition>
 
       <div class="field-group">
-        <label class="field-label" for="dbcfile-input">
-          DBC File
-          <span class="optional">(optional)</span>
-        </label>
-        <div class="file-picker-row">
-          <input
-            id="dbcfile-input"
-            class="text-input mono"
-            type="text"
-            v-model="dbcFilePath"
-            placeholder="Upload a DBC file"
-          />
-          <div class="browse-btn-group">
-            <div class="browse-btn-wrapper">
-              <button id="dbcfile-browse-btn" class="browse-btn" type="button">Browse...</button>
-              <input type="file" accept=".dbc" @change="handleDbcFileChange" class="browse-input-overlay" />
-            </div>
-            <button v-if="dbcFilePath" id="dbcfile-clear-btn" class="clear-btn" @click="dbcFilePath = ''; dbcFileBlob = null" title="Clear">×</button>
-          </div>
+        <label class="field-label">Active DBC</label>
+        <div class="dbc-summary">
+          <span class="dbc-name">{{ activeDbcLabel }}</span>
+          <span class="field-hint">Manage DBC files from the file manager in the nav bar.</span>
         </div>
       </div>
 

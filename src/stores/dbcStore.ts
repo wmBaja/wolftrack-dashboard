@@ -1,17 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-
-let backendPort: number | null = null;
-async function getVisualizerBase() {
-  if (!backendPort) {
-    if (window.electronAPI?.getBackendPort) {
-      backendPort = await window.electronAPI.getBackendPort();
-    } else {
-      backendPort = 8000;
-    }
-  }
-  return `http://127.0.0.1:${backendPort}`;
-}
+import { getVisualizerBase } from '@/lib/visualizer'
 
 export interface DbcSignal {
   id: string

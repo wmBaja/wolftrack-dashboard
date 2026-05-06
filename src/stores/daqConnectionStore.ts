@@ -72,6 +72,21 @@ function withTimeout(url: string, init?: RequestInit) {
   })
 }
 
+async function parseJsonResponse<T>(response: Response, fallbackMessage: string): Promise<T> {
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    const text = await response.text()
+    const snippet = text.trim().slice(0, 120)
+    throw new Error(
+      response.ok
+        ? fallbackMessage
+        : `${fallbackMessage} (${response.status}). ${snippet || 'Response was not JSON.'}`
+    )
+  }
+
+  return await response.json() as T
+}
+
 export const useDaqConnectionStore = defineStore('daqConnection', () => {
   const connectionState = ref<DaqConnectionState>('disconnected')
   const error = ref<string | null>(null)
@@ -169,6 +184,9 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     try {
       const services = await window.electronAPI.discoverDaqServices()
       discoveries.value = services
+      if (services.length === 0) {
+        error.value = 'No DAQ services found. Make sure the logger is running, zeroconf is installed on the DAQ, and both devices are on the same network.'
+      }
       connectionState.value = isConnected.value ? 'connected' : 'disconnected'
     } catch (discoverError) {
       connectionState.value = 'error'
@@ -191,7 +209,10 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     try {
       connectionState.value = 'checking'
       const healthResponse = await withTimeout(`${loggerBase}/health`)
-      const healthPayload = await healthResponse.json() as LoggerHealthResponse
+      const healthPayload = await parseJsonResponse<LoggerHealthResponse>(
+        healthResponse,
+        'DAQ health endpoint returned an unexpected response.'
+      )
       health.value = healthPayload
 
       if (!healthResponse.ok || healthPayload.status !== 'healthy') {
@@ -199,9 +220,12 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       }
 
       const streamResponse = await withTimeout(`${loggerBase}/api/stream-endpoint`)
-      const streamPayload = await streamResponse.json() as LoggerStreamEndpoint
+      const streamPayload = await parseJsonResponse<LoggerStreamEndpoint>(
+        streamResponse,
+        'DAQ stream endpoint lookup failed.'
+      )
       if (!streamResponse.ok) {
-        throw new Error('DAQ stream endpoint lookup failed.')
+        throw new Error(`DAQ stream endpoint lookup failed (${streamResponse.status}).`)
       }
       if (!streamPayload.enabled) {
         throw new Error('DAQ live streaming is disabled on the logger.')
@@ -222,7 +246,10 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
         }),
       })
 
-      const connectPayload = await connectResponse.json()
+      const connectPayload = await parseJsonResponse<{ detail?: string; message?: string }>(
+        connectResponse,
+        'Visualizer live-source connect returned an unexpected response.'
+      )
       if (!connectResponse.ok) {
         throw new Error(connectPayload.detail ?? connectPayload.message ?? 'Failed to connect live source.')
       }
@@ -239,7 +266,11 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       return true
     } catch (connectError) {
       connectionState.value = 'error'
-      error.value = connectError instanceof Error ? connectError.message : String(connectError)
+      if (connectError instanceof DOMException && connectError.name === 'AbortError') {
+        error.value = 'DAQ request timed out. Check the host, port, and network connection.'
+      } else {
+        error.value = connectError instanceof Error ? connectError.message : String(connectError)
+      }
       return false
     }
   }
@@ -250,7 +281,10 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       const response = await fetch(`${visualizerBase}/api/live_source/disconnect`, {
         method: 'POST',
       })
-      const payload = await response.json()
+      const payload = await parseJsonResponse<{ detail?: string; message?: string }>(
+        response,
+        'Visualizer live-source disconnect returned an unexpected response.'
+      )
       if (!response.ok) {
         throw new Error(payload.detail ?? payload.message ?? 'Failed to disconnect live source.')
       }
