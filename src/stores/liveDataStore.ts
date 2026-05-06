@@ -1,18 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useDataSourceStore } from './dataSourceStore'
-
-let backendPort: number | null = null;
-async function getVisualizerWsBase() {
-  if (!backendPort) {
-    if (window.electronAPI?.getBackendPort) {
-      backendPort = await window.electronAPI.getBackendPort();
-    } else {
-      backendPort = 8000;
-    }
-  }
-  return `ws://127.0.0.1:${backendPort}/ws/stream`;
-}
+import { useDaqConnectionStore } from './daqConnectionStore'
+import { getVisualizerWsUrl } from '@/lib/visualizer'
 
 export interface SignalData {
   id: string
@@ -36,7 +26,7 @@ export const useLiveDataStore = defineStore('liveData', () => {
     if (ws || isConnecting.value) return
     isConnecting.value = true
 
-    const wsUrl = await getVisualizerWsBase()
+    const wsUrl = await getVisualizerWsUrl()
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
@@ -50,10 +40,10 @@ export const useLiveDataStore = defineStore('liveData', () => {
         const payload = JSON.parse(event.data)
         
         if (!Array.isArray(payload)) {
-          if (payload.type === 'status') {
-            const dataSource = useDataSourceStore()
-            dataSource.status = payload.status
-          }
+          const dataSource = useDataSourceStore()
+          const daqConnection = useDaqConnectionStore()
+          dataSource.handleVisualizerMessage(payload)
+          daqConnection.handleVisualizerMessage(payload)
           return
         }
 
