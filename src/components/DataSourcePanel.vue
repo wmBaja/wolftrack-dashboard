@@ -18,6 +18,10 @@ const daqHost = ref<string>(daqConnection.target.host)
 const daqPort = ref<number>(daqConnection.target.port || 5000)
 const logFileBlob = ref<File | null>(null)
 
+function isCurrentDaqTarget(host: string, port: number) {
+  return daqConnection.target.host === host.trim() && daqConnection.target.port === Number(port)
+}
+
 function syncDraftState() {
   sourceMode.value = dataSource.config.source
   logFilePath.value = dataSource.config.log_file ?? ''
@@ -79,7 +83,9 @@ async function applyLogfileConfig() {
 }
 
 async function connectToDaq() {
-  if (!prepareForNewStream()) return
+  const isResumingReadyStream = daqConnection.connectionState === 'ready'
+    && isCurrentDaqTarget(daqHost.value, daqPort.value)
+  if (!isResumingReadyStream && !prepareForNewStream()) return
 
   syncDaqTargetDraft()
 
@@ -96,11 +102,16 @@ async function connectToDaq() {
 
   if (dataSource.status === 'error') return
 
-  const connected = await daqConnection.connect()
+  const connected = await daqConnection.connect({ autostart: isResumingReadyStream })
   if (connected) {
     await dbcStore.fetchSignals()
     isOpen.value = false
   }
+}
+
+async function stopDaqStreaming() {
+  await daqConnection.stopStreaming()
+  isOpen.value = false
 }
 
 async function disconnectDaq() {
@@ -123,10 +134,29 @@ function useTarget(target: DaqTarget) {
   daqPort.value = target.port
 }
 
+const canStartReadyStream = computed(() => {
+  return daqConnection.connectionState === 'ready'
+    && isCurrentDaqTarget(daqHost.value, daqPort.value)
+})
+
+const canDisconnectDaq = computed(() => {
+  return daqConnection.connectionState === 'connected' || daqConnection.connectionState === 'ready'
+})
+
+const daqPrimaryActionLabel = computed(() => {
+  if (isBusy.value) {
+    return canStartReadyStream.value ? 'Starting...' : 'Connecting...'
+  }
+
+  return canStartReadyStream.value ? 'Start' : 'Connect'
+})
+
 const daqStatusColor = computed(() => {
   switch (daqConnection.connectionState) {
     case 'connected':
       return 'var(--color-success)'
+    case 'ready':
+      return 'var(--color-blue-text)'
     case 'checking':
     case 'connecting':
     case 'discovering':
@@ -141,7 +171,9 @@ const daqStatusColor = computed(() => {
 const daqStatusLabel = computed(() => {
   switch (daqConnection.connectionState) {
     case 'connected':
-      return 'Connected'
+      return 'Streaming'
+    case 'ready':
+      return 'Ready'
     case 'checking':
       return 'Checking'
     case 'connecting':
@@ -369,6 +401,16 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
         </button>
         <button
           v-if="sourceMode === 'zmq' && daqConnection.isConnected"
+          id="stop-daq-btn"
+          class="action-btn danger"
+          @click="stopDaqStreaming"
+          :disabled="isBusy"
+        >
+          Stop
+        </button>
+        <button
+          v-if="sourceMode === 'zmq' && canDisconnectDaq"
+          id="disconnect-daq-btn"
           class="action-btn danger"
           @click="disconnectDaq"
           :disabled="isBusy"
@@ -388,12 +430,13 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
             {{ isBusy ? 'Applying...' : 'Apply & Start' }}
           </button>
           <button
-            v-else
+            v-else-if="daqConnection.connectionState !== 'connected'"
+            id="connect-daq-btn"
             class="action-btn primary"
             :disabled="isBusy || !daqHost || !daqPort"
             @click="connectToDaq"
           >
-            {{ isBusy ? 'Connecting...' : 'Connect' }}
+            {{ daqPrimaryActionLabel }}
           </button>
         </div>
       </div>
@@ -750,6 +793,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }

@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { getVisualizerBase } from '@/lib/visualizer'
-import { useDataSourceStore } from './dataSourceStore'
+import { useDataSourceStore, type LiveSourceConfig } from './dataSourceStore'
 
 export type DaqConnectionState =
   | 'disconnected'
+  | 'ready'
   | 'discovering'
   | 'checking'
   | 'connecting'
@@ -46,6 +47,15 @@ const STORAGE_KEY = 'dashboard-daq-targets'
 const DEFAULT_PORT = 5000
 const REQUEST_TIMEOUT_MS = 4000
 const MAX_RECENT_TARGETS = 5
+
+function hasRememberedLiveSource(liveSource: Partial<LiveSourceConfig>) {
+  return Boolean(
+    liveSource.flask_host
+      || liveSource.flask_port
+      || liveSource.zmq_host
+      || liveSource.zmq_port
+  )
+}
 
 function normalizeTarget(target: Partial<DaqTarget>): DaqTarget | null {
   const host = `${target.host ?? ''}`.trim()
@@ -97,6 +107,33 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
   const health = ref<LoggerHealthResponse | null>(null)
 
   const isConnected = computed(() => connectionState.value === 'connected')
+  const isReady = computed(() => connectionState.value === 'ready')
+
+  function applyLiveSourceState(liveSource: Partial<LiveSourceConfig>) {
+    const liveTarget = normalizeTarget({
+      host: liveSource.flask_host ?? '',
+      port: liveSource.flask_port ?? DEFAULT_PORT,
+    })
+
+    if (liveTarget) {
+      target.value = liveTarget
+    }
+
+    if (liveSource.connected) {
+      connectionState.value = 'connected'
+      error.value = null
+      return
+    }
+
+    if (hasRememberedLiveSource(liveSource)) {
+      connectionState.value = 'ready'
+      error.value = null
+      return
+    }
+
+    connectionState.value = 'disconnected'
+    error.value = null
+  }
 
   function loadPersistedTargets() {
     try {
@@ -152,23 +189,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
   async function fetchVisualizerLiveSource() {
     const dataSourceStore = useDataSourceStore()
     await dataSourceStore.fetchLiveSource()
-
-    if (dataSourceStore.liveSource.connected) {
-      connectionState.value = 'connected'
-      const liveTarget = normalizeTarget({
-        host: dataSourceStore.liveSource.flask_host ?? '',
-        port: dataSourceStore.liveSource.flask_port ?? DEFAULT_PORT,
-      })
-      if (liveTarget) {
-        target.value = liveTarget
-      }
-      error.value = null
-      return
-    }
-
-    if (connectionState.value !== 'error') {
-      connectionState.value = 'disconnected'
-    }
+    applyLiveSourceState(dataSourceStore.liveSource)
   }
 
   async function discoverServices() {
@@ -178,6 +199,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       return
     }
 
+    const previousState = connectionState.value
     connectionState.value = 'discovering'
     error.value = null
 
@@ -187,14 +209,17 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       if (services.length === 0) {
         error.value = 'No DAQ services found. Make sure the logger is running, zeroconf is installed on the DAQ, and both devices are on the same network.'
       }
-      connectionState.value = isConnected.value ? 'connected' : 'disconnected'
+      connectionState.value = previousState === 'connected' || previousState === 'ready'
+        ? previousState
+        : 'disconnected'
     } catch (discoverError) {
       connectionState.value = 'error'
       error.value = discoverError instanceof Error ? discoverError.message : String(discoverError)
     }
   }
 
-  async function connect() {
+  async function connect(options?: { autostart?: boolean }) {
+    const autostart = options?.autostart ?? true
     const nextTarget = normalizeTarget(target.value)
     if (!nextTarget) {
       connectionState.value = 'error'
@@ -204,6 +229,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
 
     const dataSourceStore = useDataSourceStore()
     const loggerBase = `http://${nextTarget.host}:${nextTarget.port}`
+    const canResume = connectionState.value === 'ready' || hasRememberedLiveSource(dataSourceStore.liveSource)
     error.value = null
 
     try {
@@ -263,15 +289,46 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       }
       rememberTarget(nextTarget)
       connectionState.value = 'connected'
+
+      if (!autostart) {
+        await stopStreaming()
+      }
       return true
     } catch (connectError) {
-      connectionState.value = 'error'
       if (connectError instanceof DOMException && connectError.name === 'AbortError') {
         error.value = 'DAQ request timed out. Check the host, port, and network connection.'
       } else {
         error.value = connectError instanceof Error ? connectError.message : String(connectError)
       }
+      connectionState.value = canResume ? 'ready' : 'error'
       return false
+    }
+  }
+
+  async function stopStreaming() {
+    try {
+      const visualizerBase = await getVisualizerBase()
+      const response = await fetch(`${visualizerBase}/api/live_source/stop`, {
+        method: 'POST',
+      })
+      const payload = await parseJsonResponse<{ detail?: string; message?: string }>(
+        response,
+        'Visualizer live-source stop returned an unexpected response.'
+      )
+      if (!response.ok) {
+        throw new Error(payload.detail ?? payload.message ?? 'Failed to stop live source.')
+      }
+
+      const dataSourceStore = useDataSourceStore()
+      dataSourceStore.liveSource = {
+        ...dataSourceStore.liveSource,
+        connected: false,
+      }
+      connectionState.value = 'ready'
+      error.value = null
+    } catch (stopError) {
+      connectionState.value = 'error'
+      error.value = stopError instanceof Error ? stopError.message : String(stopError)
     }
   }
 
@@ -290,7 +347,14 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       }
 
       const dataSourceStore = useDataSourceStore()
-      dataSourceStore.liveSource.connected = false
+      dataSourceStore.liveSource = {
+        connected: false,
+        flask_host: null,
+        flask_port: null,
+        zmq_host: null,
+        zmq_port: null,
+      }
+      health.value = null
       connectionState.value = 'disconnected'
       error.value = null
     } catch (disconnectError) {
@@ -304,15 +368,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       return
     }
 
-    if ('connected' in payload && payload.connected) {
-      connectionState.value = 'connected'
-      error.value = null
-      return
-    }
-
-    if (connectionState.value !== 'error') {
-      connectionState.value = 'disconnected'
-    }
+    applyLiveSourceState(payload as Partial<LiveSourceConfig>)
   }
 
   loadPersistedTargets()
@@ -326,11 +382,13 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     discoveries,
     health,
     isConnected,
+    isReady,
     loadPersistedTargets,
     selectTarget,
     discoverServices,
     fetchVisualizerLiveSource,
     connect,
+    stopStreaming,
     disconnect,
     handleVisualizerMessage,
   }
