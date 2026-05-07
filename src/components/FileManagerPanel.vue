@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useDbcStore } from '@/stores/dbcStore'
+import { useLogStore } from '@/stores/logStore'
+import { useDaqConnectionStore } from '@/stores/daqConnectionStore'
 
 const dbcStore = useDbcStore()
+const logStore = useLogStore()
+const daqConnection = useDaqConnectionStore()
 
 const isOpen = ref(false)
 const activeTab = ref<'logs' | 'dbc'>('dbc')
@@ -11,6 +15,9 @@ function togglePanel() {
   isOpen.value = !isOpen.value
   if (isOpen.value) {
     dbcStore.fetchDbcs()
+    if (activeTab.value === 'logs') {
+      logStore.fetchLogs()
+    }
   }
 }
 
@@ -30,6 +37,17 @@ function deleteDbc(filename: string) {
   dbcStore.deleteDbc(filename)
 }
 
+function showLogsTab() {
+  activeTab.value = 'logs'
+  if (isOpen.value) {
+    logStore.fetchLogs()
+  }
+}
+
+function downloadLog(name: string, url: string) {
+  logStore.downloadLog({ name, url })
+}
+
 defineExpose({ togglePanel })
 
 function formatSize(bytes: number) {
@@ -41,9 +59,77 @@ function formatSize(bytes: number) {
 }
 
 function formatDate(timestamp: number) {
-  return new Date(timestamp * 1000).toLocaleDateString(undefined, {
+  const date = timestamp > 1_000_000_000_000 ? new Date(timestamp) : new Date(timestamp * 1000)
+
+  return date.toLocaleDateString(undefined, {
     year: 'numeric', month: 'short', day: 'numeric'
   })
+}
+
+function parseLogDateFromFilename(filename: string) {
+  const match = filename.match(/(\d{4})(\d{2})(\d{2})[_-](\d{2})(\d{2})(\d{2})/)
+  if (!match) {
+    return null
+  }
+
+  const [, year, month, day, hours, minutes, seconds] = match
+  const parsed = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hours),
+    Number(minutes),
+    Number(seconds),
+  )
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function formatLogDate(log: { name: string; mtime?: number }) {
+  if (typeof log.mtime === 'number') {
+    return formatDate(log.mtime)
+  }
+
+  const parsed = parseLogDateFromFilename(log.name)
+  if (!parsed) {
+    return null
+  }
+
+  return parsed.toLocaleDateString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric'
+  })
+}
+
+function getLogTimestamp(log: { name: string; mtime?: number }) {
+  if (typeof log.mtime === 'number') {
+    return log.mtime > 1_000_000_000_000 ? log.mtime : log.mtime * 1000
+  }
+
+  const parsed = parseLogDateFromFilename(log.name)
+  return parsed ? parsed.getTime() : Number.NEGATIVE_INFINITY
+}
+
+function getActiveLogName() {
+  const explicitlyActive = logStore.availableLogs.find((log) => log.active)
+  if (explicitlyActive) {
+    return explicitlyActive.name
+  }
+
+  if (daqConnection.loggingStatus !== 'active' && daqConnection.loggingStatus !== 'starting') {
+    return null
+  }
+
+  if (logStore.availableLogs.length === 0) {
+    return null
+  }
+
+  return logStore.availableLogs.reduce((latest, log) => {
+    return getLogTimestamp(log) > getLogTimestamp(latest) ? log : latest
+  }).name
+}
+
+function isActiveLog(log: { name: string; active?: boolean }) {
+  return getActiveLogName() === log.name
 }
 
 onMounted(() => {
@@ -64,9 +150,10 @@ onMounted(() => {
       <!-- Tabs -->
       <div class="tabs">
         <button
+          id="file-manager-logs-tab"
           class="tab-btn"
           :class="{ active: activeTab === 'logs' }"
-          @click="activeTab = 'logs'"
+          @click="showLogsTab"
         >
           Logs
         </button>
@@ -83,8 +170,51 @@ onMounted(() => {
       <div class="drawer-content">
         <!-- Logs Tab -->
         <div v-if="activeTab === 'logs'" class="tab-pane">
-          <div class="empty-state">
-            <p>Log downloading from wolftrack-logger will be implemented here.</p>
+          <div class="logs-header">
+            <div class="logs-source">
+              <span class="logs-label">DAQ Log API</span>
+              <span class="logs-target">
+                {{ daqConnection.target.host || 'No DAQ selected' }}<template v-if="daqConnection.target.port">:{{ daqConnection.target.port }}</template>/api/logs
+              </span>
+            </div>
+            <button class="refresh-btn" @click="logStore.fetchLogs" :disabled="logStore.isLoading">Refresh</button>
+          </div>
+          <div v-if="logStore.error" class="error-msg">{{ logStore.error }}</div>
+          <div class="file-list">
+            <div v-if="logStore.isLoading" class="empty-state">
+              <p>Loading logs...</p>
+            </div>
+            <div v-else-if="logStore.availableLogs.length === 0" class="empty-state">
+              <p>No DAQ log files were returned by the logger API.</p>
+            </div>
+            <div
+              v-for="log in logStore.availableLogs"
+              :key="log.name"
+              class="file-item"
+              :class="{ 'is-logging': isActiveLog(log) }"
+            >
+              <div class="file-info">
+                <span class="status-indicator"></span>
+                <div class="file-details">
+                  <span class="filename">{{ log.name }}</span>
+                  <span class="file-stats">
+                    <template v-if="typeof log.size === 'number'">{{ formatSize(log.size) }}</template>
+                    <template v-if="typeof log.size === 'number' && formatLogDate(log)"> &bull; </template>
+                    <template v-if="formatLogDate(log)">{{ formatLogDate(log) }}</template>
+                    <template v-if="typeof log.size !== 'number' && !formatLogDate(log)">{{ log.url }}</template>
+                  </span>
+                </div>
+              </div>
+              <button
+                :id="`download-log-${log.name.replace(/\./g, '-')}-btn`"
+                class="download-btn"
+                :disabled="logStore.downloadingName === log.name"
+                @click.stop="downloadLog(log.name, log.url)"
+                title="Download"
+              >
+                {{ logStore.downloadingName === log.name ? 'Saving...' : 'Download' }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -219,6 +349,34 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
+.logs-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.logs-source {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.logs-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+}
+
+.logs-target {
+  font-size: 12px;
+  color: var(--color-text);
+  word-break: break-all;
+}
+
 .upload-btn {
   display: flex;
   align-items: center;
@@ -270,6 +428,10 @@ onMounted(() => {
   color: var(--color-blue-text);
   font-weight: 500;
 }
+.file-item.is-logging .status-indicator {
+  background: var(--color-success);
+  box-shadow: 0 0 8px var(--color-success);
+}
 
 .file-info {
   display: flex;
@@ -308,7 +470,8 @@ onMounted(() => {
   transition: all 0.3s;
 }
 
-.delete-btn {
+.delete-btn,
+.download-btn {
   background: none;
   border: none;
   color: var(--color-muted);
@@ -318,12 +481,36 @@ onMounted(() => {
   transition: all 0.2s;
   opacity: 0;
 }
-.file-item:hover .delete-btn {
+.file-item:hover .delete-btn,
+.file-item:hover .download-btn {
   opacity: 1;
 }
-.delete-btn:hover {
+.delete-btn:hover,
+.download-btn:hover {
   color: var(--color-danger-text);
   background: rgba(239, 68, 68, 0.1);
+}
+
+.refresh-btn {
+  padding: 7px 12px;
+  background: var(--color-blue-bg-glow);
+  border: 1px solid var(--color-blue-border);
+  border-radius: 7px;
+  color: var(--color-blue-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.22);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .empty-state {

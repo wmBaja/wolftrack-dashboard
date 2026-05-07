@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openFile: (filters) => ipcRenderer.invoke('dialog:openFile', filters),
   getBackendPort: () => ipcRenderer.invoke('get-backend-port'),
   discoverDaqServices: () => ipcRenderer.invoke('discover-daq-services'),
+  downloadFileFromUrl: (url, suggestedFilename) => ipcRenderer.invoke('download:file-from-url', { url, suggestedFilename }),
 })

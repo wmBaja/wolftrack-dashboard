@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { getVisualizerBase } from '@/lib/visualizer'
 import { useDataSourceStore, type LiveSourceConfig } from './dataSourceStore'
+import { useLogStore } from './logStore'
 
 export type DaqConnectionState =
   | 'disconnected'
@@ -490,7 +491,15 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       return false
     }
 
-    return loggingActive.value ? await stopLogging() : await startLogging()
+    try {
+      return loggingActive.value ? await stopLogging() : await startLogging()
+    } finally {
+      try {
+        await useLogStore().fetchLogs()
+      } catch (logRefreshError) {
+        console.warn('Failed to refresh DAQ logs after toggling logging:', logRefreshError)
+      }
+    }
   }
 
   async function disconnect() {

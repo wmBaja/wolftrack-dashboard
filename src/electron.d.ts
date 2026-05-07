@@ -16,6 +16,7 @@ declare global {
       openFile: (filters: Electron.FileFilter[]) => Promise<string | null>
       getBackendPort: () => Promise<number>
       discoverDaqServices: () => Promise<DaqDiscoveryService[]>
+      downloadFileFromUrl: (url: string, suggestedFilename: string) => Promise<boolean>
     } | undefined
   }
 }
