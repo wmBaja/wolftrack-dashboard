@@ -6,14 +6,24 @@ import 'uplot/dist/uPlot.min.css'
 const props = defineProps<{
   signals: string[]
   getData: () => uPlot.AlignedData
+  updateVersion: number
+  timeOrigin: number | null
 }>()
 
 const chartContainer = ref<HTMLElement>()
 const chart = shallowRef<uPlot>()
 
 let resizeObserver: ResizeObserver | null = null
-let animationFrameId: number | null = null
-let lastDataLength = 0
+
+const getDisplayTime = (value: number) => {
+    const origin = props.timeOrigin ?? 0
+    return value - origin
+}
+
+const syncChartData = () => {
+    if (!chart.value) return
+    chart.value.setData(props.getData())
+}
 
 const initChart = () => {
     if (!chartContainer.value) return
@@ -24,8 +34,7 @@ const initChart = () => {
             label: 'Time',
             value: (u, v) => {
                 if (v == null) return "-"
-                const t0 = u.data[0]?.[0] || 0
-                return (v as number - t0).toFixed(3) + "s"
+                return getDisplayTime(v as number).toFixed(3) + "s"
             }
         } // X axis
     ]
@@ -51,9 +60,8 @@ const initChart = () => {
             {
                 stroke: '#cbd5e1',
                 grid: { stroke: '#2d3342', width: 1 },
-                values: (u, splits) => {
-                    const t0 = u.data[0]?.[0] || 0
-                    return splits.map(v => (v - t0).toFixed(1) + "s")
+                values: (_u, splits) => {
+                    return splits.map(v => getDisplayTime(v).toFixed(1) + "s")
                 }
             },
             {
@@ -82,21 +90,6 @@ const initChart = () => {
         fixSize()
     })
     resizeObserver.observe(chartContainer.value)
-
-    // Polling loop to redraw graph with new data
-    const loop = () => {
-        if (chart.value) {
-            const data = props.getData()
-            // We can check if length of the first series has changed to avoid unnecessary redraws
-            const currentLen = data[0]?.length || 0
-            if (currentLen !== lastDataLength) {
-                chart.value.setData(data)
-                lastDataLength = currentLen
-            }
-        }
-        animationFrameId = requestAnimationFrame(loop)
-    }
-    animationFrameId = requestAnimationFrame(loop)
 }
 
 onMounted(() => {
@@ -107,13 +100,16 @@ watch(() => props.signals, () => {
     if (chart.value) {
         chart.value.destroy()
     }
-    if (animationFrameId) cancelAnimationFrame(animationFrameId)
-    lastDataLength = 0
+    resizeObserver?.disconnect()
+    resizeObserver = null
     initChart()
 }, { deep: true })
 
+watch(() => props.updateVersion, () => {
+    syncChartData()
+})
+
 onBeforeUnmount(() => {
-    if (animationFrameId) cancelAnimationFrame(animationFrameId)
     resizeObserver?.disconnect()
     chart.value?.destroy()
 })

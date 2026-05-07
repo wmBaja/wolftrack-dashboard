@@ -12,13 +12,33 @@ export interface SignalData {
   arbitration_id: number
 }
 
+export interface SignalBuffer {
+  timestamps: number[]
+  values: number[]
+}
+
+export function trimSignalBuffer(buffer: SignalBuffer, cutoffTimestamp: number) {
+  let trimIndex = 0
+
+  while (trimIndex < buffer.timestamps.length && buffer.timestamps[trimIndex]! < cutoffTimestamp) {
+    trimIndex++
+  }
+
+  if (trimIndex === 0) return
+
+  buffer.timestamps.splice(0, trimIndex)
+  buffer.values.splice(0, trimIndex)
+}
+
 export const useLiveDataStore = defineStore('liveData', () => {
   const isConnected = ref(false)
   const isConnecting = ref(false)
+  const dataVersion = ref(0)
+  const sessionStartTimestamp = ref<number | null>(null)
   
   // A mapping from signal name to its array of timestamps and values
   // Storing them as separate arrays is more memory efficient for uPlot and general fast iteration
-  const buffers = ref<Record<string, { timestamps: number[], values: number[] }>>({})
+  const buffers = ref<Record<string, SignalBuffer>>({})
   
   let ws: WebSocket | null = null
 
@@ -47,6 +67,9 @@ export const useLiveDataStore = defineStore('liveData', () => {
           return
         }
 
+        const dataSource = useDataSourceStore()
+        let latestTimestamp: number | null = null
+
         for (const data of payload) {
           if (typeof data.value !== 'number') continue // Plottable data must be numbers
 
@@ -54,12 +77,25 @@ export const useLiveDataStore = defineStore('liveData', () => {
             // First time seeing this signal, initialize empty arrays
             buffers.value[data.id] = { timestamps: [], values: [] }
           }
-          
+
           const buffer = buffers.value[data.id]
           if (buffer) {
+            if (sessionStartTimestamp.value == null) {
+              sessionStartTimestamp.value = data.timestamp
+            }
             buffer.timestamps.push(data.timestamp)
             buffer.values.push(data.value as number)
+            latestTimestamp = latestTimestamp == null ? data.timestamp : Math.max(latestTimestamp, data.timestamp)
           }
+        }
+
+        if (dataSource.config.source === 'zmq' && latestTimestamp != null) {
+          const cutoffTimestamp = latestTimestamp - dataSource.config.live_buffer_window_seconds
+          Object.values(buffers.value).forEach(buffer => trimSignalBuffer(buffer, cutoffTimestamp))
+        }
+
+        if (payload.length > 0) {
+          dataVersion.value++
         }
       } catch (err) {
         console.error('Failed to parse WebSocket message', err)
@@ -89,11 +125,15 @@ export const useLiveDataStore = defineStore('liveData', () => {
 
   function clearBuffers() {
     buffers.value = {}
+    dataVersion.value++
+    sessionStartTimestamp.value = null
   }
 
   return {
     isConnected,
     buffers,
+    dataVersion,
+    sessionStartTimestamp,
     connect,
     disconnect,
     clearBuffers

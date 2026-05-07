@@ -14,6 +14,7 @@ const isOpen = ref(false)
 const sourceMode = ref<'zmq' | 'logfile'>(dataSource.config.source)
 const logFilePath = ref<string>(dataSource.config.log_file ?? '')
 const playbackSpeed = ref<number>(dataSource.config.playback_speed ?? 1.0)
+const liveBufferWindowSeconds = ref<number>(dataSource.config.live_buffer_window_seconds ?? 15)
 const daqHost = ref<string>(daqConnection.target.host)
 const daqPort = ref<number>(daqConnection.target.port || 5000)
 const logFileBlob = ref<File | null>(null)
@@ -26,6 +27,7 @@ function syncDraftState() {
   sourceMode.value = dataSource.config.source
   logFilePath.value = dataSource.config.log_file ?? ''
   playbackSpeed.value = dataSource.config.playback_speed ?? 1.0
+  liveBufferWindowSeconds.value = dataSource.config.live_buffer_window_seconds ?? 15
   daqHost.value = daqConnection.target.host
   daqPort.value = daqConnection.target.port || 5000
   logFileBlob.value = null
@@ -94,6 +96,7 @@ async function connectToDaq() {
       source: 'zmq',
       log_file: null,
       playback_speed: 1.0,
+      live_buffer_window_seconds: liveBufferWindowSeconds.value,
     },
     {
       logFileBlob: null,
@@ -287,6 +290,34 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
             <button class="secondary-inline-btn" :disabled="isBusy" @click="discoverDaqs">Discover</button>
           </div>
           <p class="field-hint">Connect to the DAQ Flask API, validate health, then resolve the live ZMQ endpoint.</p>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="live-buffer-window-input">
+            Live Buffer Window
+            <span class="optional">({{ liveBufferWindowSeconds }}s)</span>
+          </label>
+          <div class="speed-row">
+            <input
+              id="live-buffer-window-input"
+              type="range"
+              min="1"
+              max="120"
+              step="0.5"
+              v-model.number="liveBufferWindowSeconds"
+              class="speed-slider"
+            />
+            <input
+              id="live-buffer-window-number-input"
+              type="number"
+              min="1"
+              step="0.5"
+              v-model.number="liveBufferWindowSeconds"
+              class="speed-input"
+              aria-label="Live buffer window seconds"
+            />
+          </div>
+          <p class="field-hint">Only keep the most recent seconds of live DAQ data in chart memory.</p>
         </div>
 
         <div v-if="healthSummary" class="health-grid">

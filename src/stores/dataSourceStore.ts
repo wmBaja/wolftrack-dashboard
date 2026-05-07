@@ -10,6 +10,7 @@ export interface DataSourceConfig {
   log_file: string | null
   dbc_file: string | null
   playback_speed: number
+  live_buffer_window_seconds: number
 }
 
 export interface LiveSourceConfig {
@@ -36,6 +37,29 @@ interface LiveSourceStatusPayload {
   zmq_port: number | null
 }
 
+export const DEFAULT_LIVE_BUFFER_WINDOW_SECONDS = 15
+
+export function normalizeLiveBufferWindowSeconds(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_LIVE_BUFFER_WINDOW_SECONDS
+  }
+
+  return parsed
+}
+
+function normalizeDataSourceConfig(value: unknown): DataSourceConfig {
+  const raw = value as Partial<DataSourceConfig> | null | undefined
+
+  return {
+    source: raw?.source === 'logfile' ? 'logfile' : 'zmq',
+    log_file: raw?.log_file ?? null,
+    dbc_file: raw?.dbc_file ?? null,
+    playback_speed: typeof raw?.playback_speed === 'number' ? raw.playback_speed : 1.0,
+    live_buffer_window_seconds: normalizeLiveBufferWindowSeconds(raw?.live_buffer_window_seconds),
+  }
+}
+
 export const useDataSourceStore = defineStore('dataSource', () => {
   const status = ref<DataSourceStatus>('stopped')
   const error = ref<string | null>(null)
@@ -44,6 +68,7 @@ export const useDataSourceStore = defineStore('dataSource', () => {
     log_file: null,
     dbc_file: null,
     playback_speed: 1.0,
+    live_buffer_window_seconds: DEFAULT_LIVE_BUFFER_WINDOW_SECONDS,
   })
 
   const dbcSignals = ref<{ id: string, message: string, name: string, unit: string }[]>([])
@@ -73,8 +98,8 @@ export const useDataSourceStore = defineStore('dataSource', () => {
       const res = await fetch(`${baseUrl}/api/config`)
       if (!res.ok) throw new Error(`Failed to fetch config: ${res.statusText}`)
       const data = await res.json()
-      config.value = data
-      status.value = data.source === 'logfile' ? 'running' : liveSource.value.connected ? 'running' : 'stopped'
+      config.value = normalizeDataSourceConfig(data)
+      status.value = config.value.source === 'logfile' ? 'running' : liveSource.value.connected ? 'running' : 'stopped'
       if (config.value.dbc_file) {
         await fetchSignals()
       }
@@ -109,11 +134,12 @@ export const useDataSourceStore = defineStore('dataSource', () => {
     status.value = 'loading'
     error.value = null
     try {
-      const payload = { ...config.value, ...update }
+      const payload = normalizeDataSourceConfig({ ...config.value, ...update })
 
       const formData = new FormData()
       formData.append('source', payload.source)
       formData.append('playback_speed', payload.playback_speed.toString())
+      formData.append('live_buffer_window_seconds', payload.live_buffer_window_seconds.toString())
 
       if (files?.logFileBlob) {
         formData.append('log_file_upload', files.logFileBlob)
