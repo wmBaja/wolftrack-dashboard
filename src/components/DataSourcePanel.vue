@@ -202,8 +202,18 @@ const healthSummary = computed(() => {
   const health = daqConnection.health
   if (!health) return null
 
+  const sessionState = daqConnection.loggingStatus === 'starting'
+    ? 'active'
+    : daqConnection.loggingStatus === 'stopping'
+      ? 'idle'
+      : daqConnection.loggingActive
+        ? 'active'
+        : typeof health.session === 'boolean'
+          ? health.session ? 'active' : 'idle'
+          : 'idle'
+
   return {
-    session: health.session ? 'active' : 'idle',
+    session: sessionState,
     can: health.can_connected ? 'ready' : 'offline',
     dbc: health.dbc_loaded ? 'loaded' : 'missing',
   }

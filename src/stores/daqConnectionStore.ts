@@ -12,6 +12,8 @@ export type DaqConnectionState =
   | 'connected'
   | 'error'
 
+export type DaqLoggingStatus = 'idle' | 'starting' | 'active' | 'stopping'
+
 export interface DaqTarget {
   host: string
   port: number
@@ -41,6 +43,12 @@ interface LoggerStreamEndpoint {
   host: string
   port: number
   enabled: boolean
+}
+
+interface LoggerSessionResponse {
+  success: boolean
+  message?: string
+  error?: string
 }
 
 const STORAGE_KEY = 'dashboard-daq-targets'
@@ -105,9 +113,52 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
   const recentTargets = ref<DaqTarget[]>([])
   const discoveries = ref<DaqDiscoveryResult[]>([])
   const health = ref<LoggerHealthResponse | null>(null)
+  const loggingActive = ref(false)
+  const loggingStatus = ref<DaqLoggingStatus>('idle')
 
   const isConnected = computed(() => connectionState.value === 'connected')
   const isReady = computed(() => connectionState.value === 'ready')
+  const hasHealthyDaq = computed(() => {
+    return (connectionState.value === 'connected' || connectionState.value === 'ready')
+      && health.value?.status === 'healthy'
+  })
+  const canToggleLogging = computed(() => {
+    const nextTarget = normalizeTarget(target.value)
+
+    return Boolean(nextTarget)
+      && hasHealthyDaq.value
+      && connectionState.value !== 'checking'
+      && connectionState.value !== 'connecting'
+      && connectionState.value !== 'discovering'
+      && loggingStatus.value !== 'starting'
+      && loggingStatus.value !== 'stopping'
+  })
+
+  function setLoggingStateFromHealth(nextHealth: LoggerHealthResponse | null | undefined) {
+    if (typeof nextHealth?.session !== 'boolean') {
+      return
+    }
+
+    loggingActive.value = nextHealth.session
+    loggingStatus.value = nextHealth.session ? 'active' : 'idle'
+  }
+
+  async function fetchLoggerHealth(nextTarget: DaqTarget) {
+    const loggerBase = `http://${nextTarget.host}:${nextTarget.port}`
+    const healthResponse = await withTimeout(`${loggerBase}/health`)
+    const healthPayload = await parseJsonResponse<LoggerHealthResponse>(
+      healthResponse,
+      'DAQ health endpoint returned an unexpected response.'
+    )
+    health.value = healthPayload
+    setLoggingStateFromHealth(healthPayload)
+
+    if (!healthResponse.ok || healthPayload.status !== 'healthy') {
+      throw new Error(healthPayload.error || 'DAQ health check failed.')
+    }
+
+    return healthPayload
+  }
 
   function applyLiveSourceState(liveSource: Partial<LiveSourceConfig>) {
     const liveTarget = normalizeTarget({
@@ -133,6 +184,9 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
 
     connectionState.value = 'disconnected'
     error.value = null
+    health.value = null
+    loggingActive.value = false
+    loggingStatus.value = 'idle'
   }
 
   function loadPersistedTargets() {
@@ -190,6 +244,22 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     const dataSourceStore = useDataSourceStore()
     await dataSourceStore.fetchLiveSource()
     applyLiveSourceState(dataSourceStore.liveSource)
+
+    const nextTarget = normalizeTarget(target.value)
+    if (!nextTarget) {
+      return
+    }
+
+    try {
+      await fetchLoggerHealth(nextTarget)
+      error.value = null
+    } catch (healthError) {
+      if (healthError instanceof DOMException && healthError.name === 'AbortError') {
+        error.value = 'DAQ request timed out. Check the host, port, and network connection.'
+      } else {
+        error.value = healthError instanceof Error ? healthError.message : String(healthError)
+      }
+    }
   }
 
   async function discoverServices() {
@@ -234,16 +304,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
 
     try {
       connectionState.value = 'checking'
-      const healthResponse = await withTimeout(`${loggerBase}/health`)
-      const healthPayload = await parseJsonResponse<LoggerHealthResponse>(
-        healthResponse,
-        'DAQ health endpoint returned an unexpected response.'
-      )
-      health.value = healthPayload
-
-      if (!healthResponse.ok || healthPayload.status !== 'healthy') {
-        throw new Error(healthPayload.error || 'DAQ health check failed.')
-      }
+      await fetchLoggerHealth(nextTarget)
 
       const streamResponse = await withTimeout(`${loggerBase}/api/stream-endpoint`)
       const streamPayload = await parseJsonResponse<LoggerStreamEndpoint>(
@@ -332,6 +393,106 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     }
   }
 
+  async function startLogging() {
+    const nextTarget = normalizeTarget(target.value)
+    if (!nextTarget) {
+      error.value = 'Enter a valid DAQ host and port.'
+      return false
+    }
+    if (!hasHealthyDaq.value) {
+      error.value = 'Connect to a healthy DAQ before starting logging.'
+      return false
+    }
+
+    const previousActive = loggingActive.value
+    const previousStatus = loggingStatus.value
+    error.value = null
+    loggingActive.value = true
+    loggingStatus.value = 'starting'
+
+    try {
+      const response = await withTimeout(`http://${nextTarget.host}:${nextTarget.port}/api/session/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
+      const payload = await parseJsonResponse<LoggerSessionResponse>(
+        response,
+        'DAQ logging start returned an unexpected response.'
+      )
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? payload.message ?? 'Failed to start DAQ logging.')
+      }
+
+      await fetchLoggerHealth(nextTarget)
+      error.value = null
+      return true
+    } catch (loggingError) {
+      loggingActive.value = previousActive
+      loggingStatus.value = previousStatus
+      if (loggingError instanceof DOMException && loggingError.name === 'AbortError') {
+        error.value = 'DAQ request timed out. Check the host, port, and network connection.'
+      } else {
+        error.value = loggingError instanceof Error ? loggingError.message : String(loggingError)
+      }
+      return false
+    }
+  }
+
+  async function stopLogging() {
+    const nextTarget = normalizeTarget(target.value)
+    if (!nextTarget) {
+      error.value = 'Enter a valid DAQ host and port.'
+      return false
+    }
+    if (!hasHealthyDaq.value) {
+      error.value = 'Connect to a healthy DAQ before stopping logging.'
+      return false
+    }
+
+    const previousActive = loggingActive.value
+    const previousStatus = loggingStatus.value
+    error.value = null
+    loggingActive.value = false
+    loggingStatus.value = 'stopping'
+
+    try {
+      const response = await withTimeout(`http://${nextTarget.host}:${nextTarget.port}/api/session/stop`, {
+        method: 'POST',
+      })
+      const payload = await parseJsonResponse<LoggerSessionResponse>(
+        response,
+        'DAQ logging stop returned an unexpected response.'
+      )
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? payload.message ?? 'Failed to stop DAQ logging.')
+      }
+
+      await fetchLoggerHealth(nextTarget)
+      error.value = null
+      return true
+    } catch (loggingError) {
+      loggingActive.value = previousActive
+      loggingStatus.value = previousStatus
+      if (loggingError instanceof DOMException && loggingError.name === 'AbortError') {
+        error.value = 'DAQ request timed out. Check the host, port, and network connection.'
+      } else {
+        error.value = loggingError instanceof Error ? loggingError.message : String(loggingError)
+      }
+      return false
+    }
+  }
+
+  async function toggleLogging() {
+    if (!canToggleLogging.value) {
+      return false
+    }
+
+    return loggingActive.value ? await stopLogging() : await startLogging()
+  }
+
   async function disconnect() {
     try {
       const visualizerBase = await getVisualizerBase()
@@ -355,6 +516,8 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
         zmq_port: null,
       }
       health.value = null
+      loggingActive.value = false
+      loggingStatus.value = 'idle'
       connectionState.value = 'disconnected'
       error.value = null
     } catch (disconnectError) {
@@ -381,6 +544,10 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     recentTargets,
     discoveries,
     health,
+    loggingActive,
+    loggingStatus,
+    hasHealthyDaq,
+    canToggleLogging,
     isConnected,
     isReady,
     loadPersistedTargets,
@@ -389,6 +556,9 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     fetchVisualizerLiveSource,
     connect,
     stopStreaming,
+    startLogging,
+    stopLogging,
+    toggleLogging,
     disconnect,
     handleVisualizerMessage,
   }
