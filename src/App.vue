@@ -2,12 +2,18 @@
 import { RouterView } from 'vue-router'
 import NavBar from './components/NavBar.vue'
 import { useLiveDataStore } from './stores/liveDataStore'
+import { useDataSourceStore } from './stores/dataSourceStore'
+import { useDaqConnectionStore } from './stores/daqConnectionStore'
 import { onMounted, onUnmounted } from 'vue'
 
 const liveDataStore = useLiveDataStore()
+const dataSourceStore = useDataSourceStore()
+const daqConnectionStore = useDaqConnectionStore()
 
-onMounted(() => {
-  liveDataStore.connect()
+onMounted(async () => {
+  void liveDataStore.connect()
+  await dataSourceStore.fetchConfig()
+  await daqConnectionStore.fetchVisualizerLiveSource()
 })
 
 onUnmounted(() => {

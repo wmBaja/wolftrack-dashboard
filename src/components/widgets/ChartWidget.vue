@@ -153,6 +153,8 @@ defineExpose({ handleRefresh, startEditTitle })
           v-else
           :signals="widget?.signals || []"
           :get-data="getAlignedData"
+          :update-version="liveDataStore.dataVersion"
+          :time-origin="liveDataStore.sessionStartTimestamp"
         />
       </div>
     </template>

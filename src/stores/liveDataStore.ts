@@ -1,18 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useDataSourceStore } from './dataSourceStore'
-
-let backendPort: number | null = null;
-async function getVisualizerWsBase() {
-  if (!backendPort) {
-    if (window.electronAPI?.getBackendPort) {
-      backendPort = await window.electronAPI.getBackendPort();
-    } else {
-      backendPort = 8000;
-    }
-  }
-  return `ws://127.0.0.1:${backendPort}/ws/stream`;
-}
+import { useDaqConnectionStore } from './daqConnectionStore'
+import { getVisualizerWsUrl } from '@/lib/visualizer'
 
 export interface SignalData {
   id: string
@@ -22,13 +12,33 @@ export interface SignalData {
   arbitration_id: number
 }
 
+export interface SignalBuffer {
+  timestamps: number[]
+  values: number[]
+}
+
+export function trimSignalBuffer(buffer: SignalBuffer, cutoffTimestamp: number) {
+  let trimIndex = 0
+
+  while (trimIndex < buffer.timestamps.length && buffer.timestamps[trimIndex]! < cutoffTimestamp) {
+    trimIndex++
+  }
+
+  if (trimIndex === 0) return
+
+  buffer.timestamps.splice(0, trimIndex)
+  buffer.values.splice(0, trimIndex)
+}
+
 export const useLiveDataStore = defineStore('liveData', () => {
   const isConnected = ref(false)
   const isConnecting = ref(false)
+  const dataVersion = ref(0)
+  const sessionStartTimestamp = ref<number | null>(null)
   
   // A mapping from signal name to its array of timestamps and values
   // Storing them as separate arrays is more memory efficient for uPlot and general fast iteration
-  const buffers = ref<Record<string, { timestamps: number[], values: number[] }>>({})
+  const buffers = ref<Record<string, SignalBuffer>>({})
   
   let ws: WebSocket | null = null
 
@@ -36,7 +46,7 @@ export const useLiveDataStore = defineStore('liveData', () => {
     if (ws || isConnecting.value) return
     isConnecting.value = true
 
-    const wsUrl = await getVisualizerWsBase()
+    const wsUrl = await getVisualizerWsUrl()
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
@@ -50,12 +60,15 @@ export const useLiveDataStore = defineStore('liveData', () => {
         const payload = JSON.parse(event.data)
         
         if (!Array.isArray(payload)) {
-          if (payload.type === 'status') {
-            const dataSource = useDataSourceStore()
-            dataSource.status = payload.status
-          }
+          const dataSource = useDataSourceStore()
+          const daqConnection = useDaqConnectionStore()
+          dataSource.handleVisualizerMessage(payload)
+          daqConnection.handleVisualizerMessage(payload)
           return
         }
+
+        const dataSource = useDataSourceStore()
+        let latestTimestamp: number | null = null
 
         for (const data of payload) {
           if (typeof data.value !== 'number') continue // Plottable data must be numbers
@@ -64,12 +77,25 @@ export const useLiveDataStore = defineStore('liveData', () => {
             // First time seeing this signal, initialize empty arrays
             buffers.value[data.id] = { timestamps: [], values: [] }
           }
-          
+
           const buffer = buffers.value[data.id]
           if (buffer) {
+            if (sessionStartTimestamp.value == null) {
+              sessionStartTimestamp.value = data.timestamp
+            }
             buffer.timestamps.push(data.timestamp)
             buffer.values.push(data.value as number)
+            latestTimestamp = latestTimestamp == null ? data.timestamp : Math.max(latestTimestamp, data.timestamp)
           }
+        }
+
+        if (dataSource.config.source === 'zmq' && latestTimestamp != null) {
+          const cutoffTimestamp = latestTimestamp - dataSource.config.live_buffer_window_seconds
+          Object.values(buffers.value).forEach(buffer => trimSignalBuffer(buffer, cutoffTimestamp))
+        }
+
+        if (payload.length > 0) {
+          dataVersion.value++
         }
       } catch (err) {
         console.error('Failed to parse WebSocket message', err)
@@ -99,11 +125,15 @@ export const useLiveDataStore = defineStore('liveData', () => {
 
   function clearBuffers() {
     buffers.value = {}
+    dataVersion.value++
+    sessionStartTimestamp.value = null
   }
 
   return {
     isConnected,
     buffers,
+    dataVersion,
+    sessionStartTimestamp,
     connect,
     disconnect,
     clearBuffers

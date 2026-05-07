@@ -39,6 +39,47 @@ ipcMain.handle('dialog:openFile', async (_event, filters) => {
   return result.filePaths[0]
 })
 
+async function discoverDaqServices() {
+  let Bonjour
+
+  try {
+    ;({ Bonjour } = await import('bonjour-service'))
+  } catch (error) {
+    console.warn('bonjour-service is unavailable:', error)
+    return []
+  }
+
+  const bonjour = new Bonjour()
+  const browser = bonjour.find({ type: 'wolftrack-daq', protocol: 'tcp' })
+
+  return await new Promise((resolve) => {
+    const services = new Map()
+
+    browser.on('up', (service) => {
+      const host = service.addresses?.find((address) => /^\d+\.\d+\.\d+\.\d+$/.test(address))
+      if (!host) return
+
+      const id = `${service.name}-${host}-${service.port}`
+      services.set(id, {
+        id,
+        host,
+        port: service.port,
+        label: service.name,
+      })
+    })
+
+    setTimeout(() => {
+      browser.stop()
+      bonjour.destroy()
+      resolve(Array.from(services.values()))
+    }, 2500)
+  })
+}
+
+ipcMain.handle('discover-daq-services', async () => {
+  return await discoverDaqServices()
+})
+
 let backendProcess = null;
 let backendPortResolver = null;
 const backendPortPromise = new Promise(resolve => { backendPortResolver = resolve; });
