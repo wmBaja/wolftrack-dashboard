@@ -1,4 +1,5 @@
 import path from 'path'
+import { promises as fs } from 'fs'
 import { spawn } from 'child_process'
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { fileURLToPath } from 'url'
@@ -37,6 +38,25 @@ ipcMain.handle('dialog:openFile', async (_event, filters) => {
   const result = await dialog.showOpenDialog({ properties: ['openFile'], filters })
   if (result.canceled || result.filePaths.length === 0) return null
   return result.filePaths[0]
+})
+
+ipcMain.handle('download:file-from-url', async (_event, { url, suggestedFilename }) => {
+  const result = await dialog.showSaveDialog({
+    defaultPath: path.join(app.getPath('downloads'), path.basename(suggestedFilename)),
+  })
+
+  if (result.canceled || !result.filePath) {
+    return false
+  }
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to download file (${response.status}).`)
+  }
+
+  const data = Buffer.from(await response.arrayBuffer())
+  await fs.writeFile(result.filePath, data)
+  return true
 })
 
 async function discoverDaqServices() {
