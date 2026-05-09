@@ -4,11 +4,27 @@ import { getVisualizerBase } from '@/lib/visualizer'
 
 type ExportStatus = 'idle' | 'loading' | 'success'
 
+interface ExportTimezoneOption {
+  value: string
+  label: string
+}
+
+const exportTimezoneOptions: ExportTimezoneOption[] = [
+  { value: 'America/New_York', label: 'Eastern' },
+  { value: 'America/Chicago', label: 'Central' },
+  { value: 'America/Denver', label: 'Mountain' },
+  { value: 'America/Los_Angeles', label: 'Pacific' },
+  { value: 'America/Anchorage', label: 'Alaska' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii-Aleutian' },
+  { value: 'America/Phoenix', label: 'Arizona' },
+]
+
 const isOpen = ref(false)
 const selectedFile = ref<File | null>(null)
 const selectedFilename = ref('')
 const status = ref<ExportStatus>('idle')
 const errorMessage = ref<string | null>(null)
+const selectedTimezone = ref<string>('America/New_York')
 
 function resetStatus() {
   status.value = 'idle'
@@ -57,6 +73,12 @@ function parseDownloadFilename(header: string | null): string {
   return 'wolftrack-export.csv'
 }
 
+function buildExportUrl(baseUrl: string) {
+  const exportUrl = new URL(`${baseUrl}/api/export_csv`)
+  exportUrl.searchParams.set('timezone_name', selectedTimezone.value)
+  return exportUrl.toString()
+}
+
 async function exportCsv() {
   if (!selectedFile.value) {
     return
@@ -81,7 +103,7 @@ async function exportCsv() {
       throw new Error(payload.detail ?? 'Export upload failed.')
     }
 
-    const exportResponse = await fetch(`${baseUrl}/api/export_csv`)
+    const exportResponse = await fetch(buildExportUrl(baseUrl))
     if (!exportResponse.ok) {
       const payload = await exportResponse.json()
       throw new Error(payload.detail ?? 'CSV export failed.')
@@ -142,6 +164,19 @@ const canExport = computed(() => selectedFile.value !== null && status.value !==
             />
           </div>
         </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="export-timezone-select">Timestamp Time Zone</label>
+        <select id="export-timezone-select" v-model="selectedTimezone" class="select-input">
+          <option
+            v-for="timezone in exportTimezoneOptions"
+            :key="timezone.value"
+            :value="timezone.value"
+          >
+            {{ timezone.label }}
+          </option>
+        </select>
       </div>
 
       <div class="field-group">
@@ -269,6 +304,17 @@ const canExport = computed(() => selectedFile.value !== null && status.value !==
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.select-input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 11px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--color-text);
 }
 
 .browse-btn-wrapper {
