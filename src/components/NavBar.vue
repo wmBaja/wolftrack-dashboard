@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useDaqConnectionStore } from '@/stores/daqConnectionStore'
 import DataSourcePanel from './DataSourcePanel.vue'
+import ExportPanel from './ExportPanel.vue'
 import FileManagerPanel from './FileManagerPanel.vue'
 
 const fileManagerRef = ref<InstanceType<typeof FileManagerPanel> | null>(null)
@@ -40,6 +41,7 @@ async function handleLoggingToggle() {
           >
             {{ loggingButtonLabel }}
           </button>
+          <ExportPanel />
           <DataSourcePanel />
         </div>
 
