@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { getVisualizerBase } from '@/lib/visualizer'
 
 type ExportStatus = 'idle' | 'loading' | 'success'
+type ExportFormat = 'csv' | 'xlsx'
 
 interface ExportTimezoneOption {
   value: string
@@ -25,6 +26,7 @@ const selectedFilename = ref('')
 const status = ref<ExportStatus>('idle')
 const errorMessage = ref<string | null>(null)
 const selectedTimezone = ref<string>('America/New_York')
+const selectedFormat = ref<ExportFormat>('csv')
 
 function resetStatus() {
   status.value = 'idle'
@@ -52,7 +54,7 @@ function getStatusLabel() {
 
 function parseDownloadFilename(header: string | null): string {
   if (!header) {
-    return 'wolftrack-export.csv'
+    return selectedFormat.value === 'csv' ? 'wolftrack-export.csv' : 'wolftrack-export.xlsx'
   }
 
   const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i)
@@ -70,16 +72,23 @@ function parseDownloadFilename(header: string | null): string {
     return plainMatch[1].trim()
   }
 
-  return 'wolftrack-export.csv'
+  return selectedFormat.value === 'csv' ? 'wolftrack-export.csv' : 'wolftrack-export.xlsx'
 }
 
 function buildExportUrl(baseUrl: string) {
-  const exportUrl = new URL(`${baseUrl}/api/export_csv`)
+  const endpoint = selectedFormat.value === 'csv' ? 'export_csv' : 'export_xlsx'
+  const exportUrl = new URL(`${baseUrl}/api/${endpoint}`)
   exportUrl.searchParams.set('timezone_name', selectedTimezone.value)
   return exportUrl.toString()
 }
 
-async function exportCsv() {
+function getDownloadMimeType() {
+  return selectedFormat.value === 'csv'
+    ? 'text/csv;charset=utf-8'
+    : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+}
+
+async function exportFile() {
   if (!selectedFile.value) {
     return
   }
@@ -111,7 +120,7 @@ async function exportCsv() {
 
     const blob = await exportResponse.blob()
     const downloadName = parseDownloadFilename(exportResponse.headers.get('Content-Disposition'))
-    const downloadBlob = new Blob([blob], { type: 'text/csv;charset=utf-8' })
+    const downloadBlob = new Blob([blob], { type: getDownloadMimeType() })
     const downloadUrl = URL.createObjectURL(downloadBlob)
     const link = document.createElement('a')
     link.href = downloadUrl
@@ -132,7 +141,7 @@ const canExport = computed(() => selectedFile.value !== null && status.value !==
 
 <template>
   <button id="export-panel-btn" class="export-trigger" @click="openPanel">
-    Export CSV
+    Export
   </button>
 
   <Transition name="fade">
@@ -180,6 +189,20 @@ const canExport = computed(() => selectedFile.value !== null && status.value !==
       </div>
 
       <div class="field-group">
+        <label class="field-label">Format</label>
+        <div class="format-toggle" role="radiogroup" aria-label="Export format">
+          <label class="format-option" :class="{ active: selectedFormat === 'csv' }">
+            <input id="export-format-csv" v-model="selectedFormat" type="radio" value="csv" name="export-format" />
+            CSV
+          </label>
+          <label class="format-option" :class="{ active: selectedFormat === 'xlsx' }">
+            <input id="export-format-xlsx" v-model="selectedFormat" type="radio" value="xlsx" name="export-format" />
+            Excel
+          </label>
+        </div>
+      </div>
+
+      <div class="field-group">
         <label class="field-label">Status</label>
         <p id="export-status-line" class="status-line" :class="{ error: errorMessage }">{{ getStatusLabel() }}</p>
       </div>
@@ -190,9 +213,9 @@ const canExport = computed(() => selectedFile.value !== null && status.value !==
           id="export-csv-btn"
           class="action-btn primary"
           :disabled="!canExport"
-          @click="exportCsv"
+          @click="exportFile"
         >
-          {{ status === 'loading' ? 'Exporting...' : 'Export as CSV' }}
+          {{ status === 'loading' ? 'Exporting...' : 'Export' }}
         </button>
       </div>
     </div>
@@ -315,6 +338,38 @@ const canExport = computed(() => selectedFile.value !== null && status.value !==
   border-radius: 8px;
   font-size: 12px;
   color: var(--color-text);
+}
+
+.format-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.format-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.format-option.active {
+  background: var(--color-blue-bg-glow);
+  border-color: var(--color-blue-border);
+  color: var(--color-blue-text);
+}
+
+.format-option input {
+  margin: 0;
 }
 
 .browse-btn-wrapper {
