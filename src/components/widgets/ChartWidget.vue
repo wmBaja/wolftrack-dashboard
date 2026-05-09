@@ -37,7 +37,16 @@ function getAlignedData(): AlignedData {
     } else {
         const buf = logDataStore.buffers[firstSig]
         if (!buf) return [[], []]
-        return [buf.timestamps, buf.values]
+        
+        const cutoff = logDataStore.currentTime
+        let validLen = 0
+        for (let i = 0; i < buf.timestamps.length; i++) {
+            const ts = buf.timestamps[i]
+            if (ts !== undefined && ts > cutoff) break
+            validLen++
+        }
+        
+        return [buf.timestamps.slice(0, validLen), buf.values.slice(0, validLen)]
     }
   }
 
@@ -87,9 +96,13 @@ function getAlignedData(): AlignedData {
       const ts = isLive ? (buf as any).getArrays().timestamps : (buf as any).timestamps
       const vs = isLive ? (buf as any).getArrays().values : (buf as any).values
       
+      const cutoff = isLive ? Infinity : logDataStore.currentTime
+
       if (ts.length > 0) {
           for (let i = 0; i < ts.length; i++) {
             const t = ts[i]
+            if (t > cutoff) break
+            
             const v = vs[i]
             let bucketIdx = Math.floor((t - minTime) / bucketSize)
             if (bucketIdx >= numBuckets) bucketIdx = numBuckets - 1

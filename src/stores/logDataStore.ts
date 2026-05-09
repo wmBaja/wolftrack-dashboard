@@ -20,7 +20,55 @@ export const useLogDataStore = defineStore('logData', () => {
   const buffers = ref<Record<string, { timestamps: number[], values: number[] }>>({})
   const dataVersion = ref(0)
   
+  const playbackSpeed = ref(1.0)
+  const currentTime = ref(0)
+  const isPlaying = ref(false)
+  
   let pollInterval: number | null = null
+  let reqFrame = 0
+  let lastFrameTime = 0
+
+  function startPlayback(speed: number) {
+    playbackSpeed.value = speed
+    if (speed <= 0) {
+      isPlaying.value = false
+      currentTime.value = status.value.end_ts
+      dataVersion.value++
+      return
+    }
+    
+    isPlaying.value = true
+    lastFrameTime = performance.now()
+    
+    function loop(now: number) {
+      if (!isPlaying.value) return
+      
+      const dt = (now - lastFrameTime) / 1000
+      lastFrameTime = now
+      
+      currentTime.value += dt * playbackSpeed.value
+      
+      if (currentTime.value >= status.value.end_ts) {
+        currentTime.value = status.value.end_ts
+        isPlaying.value = false
+      }
+      
+      dataVersion.value++
+      if (isPlaying.value) {
+        reqFrame = requestAnimationFrame(loop)
+      }
+    }
+    
+    reqFrame = requestAnimationFrame(loop)
+  }
+
+  function clearBuffers() {
+    buffers.value = {}
+    isPlaying.value = false
+    if (reqFrame) cancelAnimationFrame(reqFrame)
+    status.value = { status: 'idle', progress: 0, start_ts: 0, end_ts: 0 }
+    dataVersion.value++
+  }
 
   async function checkStatus() {
     try {
@@ -33,6 +81,12 @@ export const useLogDataStore = defineStore('logData', () => {
         if (data.status === 'ready' && pollInterval) {
           clearInterval(pollInterval)
           pollInterval = null
+          
+          currentTime.value = data.start_ts
+          import('./dataSourceStore').then(m => {
+            const ds = m.useDataSourceStore()
+            startPlayback(ds.config.playback_speed ?? 1.0)
+          })
         }
       }
     } catch (e) {
@@ -85,8 +139,10 @@ export const useLogDataStore = defineStore('logData', () => {
     status,
     buffers,
     dataVersion,
+    currentTime,
     startPollingStatus,
     stopPolling,
-    queryData
+    queryData,
+    clearBuffers
   }
 })

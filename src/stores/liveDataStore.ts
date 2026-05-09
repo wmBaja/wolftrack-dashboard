@@ -34,7 +34,7 @@ export class RingBuffer {
   }
 
   trim(cutoffTimestamp: number) {
-    while (this.length > 0 && this.timestamps[this.tail] < cutoffTimestamp) {
+    while (this.length > 0 && this.timestamps[this.tail] !== undefined && this.timestamps[this.tail]! < cutoffTimestamp) {
       this.tail = (this.tail + 1) % this.capacity
       this.length--
     }
@@ -144,6 +144,7 @@ export const useLiveDataStore = defineStore('liveData', () => {
             for (let i = 0; i < typedData.timestamps.length; i++) {
               const ts = typedData.timestamps[i]
               const val = typedData.values[i]
+              if (ts === undefined || val === undefined) continue
               if (sessionStartTimestamp.value == null) {
                 sessionStartTimestamp.value = ts
               }
