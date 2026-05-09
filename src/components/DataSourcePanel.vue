@@ -18,6 +18,9 @@ watch(() => [dataSource.config.source, dataSource.status], ([source, status]) =>
     logData.startPollingStatus()
   } else {
     logData.stopPolling()
+    if (source === 'logfile' && status !== 'running') {
+      logData.stopPlayback()
+    }
   }
 }, { immediate: true })
 
@@ -166,6 +169,13 @@ const daqPrimaryActionLabel = computed(() => {
 })
 
 const daqStatusColor = computed(() => {
+  if (dataSource.config.source === 'logfile') {
+    if (logData.status.status === 'loading') return 'var(--color-warning)'
+    if (logData.status.status === 'ready' && logData.isPlaying) return 'var(--color-success)'
+    if (logData.status.status === 'ready') return 'var(--color-blue-text)'
+    return 'var(--color-muted)'
+  }
+
   switch (daqConnection.connectionState) {
     case 'connected':
       return 'var(--color-success)'
@@ -183,6 +193,16 @@ const daqStatusColor = computed(() => {
 })
 
 const daqStatusLabel = computed(() => {
+  if (dataSource.config.source === 'logfile') {
+    if (logData.status.status === 'loading') return 'Indexing'
+    if (logData.status.status === 'ready') {
+      if (logData.isPlaying) return 'Playing'
+      if (logData.currentTime >= logData.status.end_ts && logData.status.end_ts > 0) return 'Finished'
+      return 'Ready'
+    }
+    return 'Idle'
+  }
+
   switch (daqConnection.connectionState) {
     case 'connected':
       return 'Streaming'

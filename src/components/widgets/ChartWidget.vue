@@ -70,7 +70,8 @@ function getAlignedData(): AlignedData {
     } else {
         if (buf && (buf as any).timestamps.length > 0) {
           const firstTime = (buf as any).timestamps[0]
-          const lastTime = (buf as any).timestamps[(buf as any).timestamps.length - 1]
+          const lastFileTime = (buf as any).timestamps[(buf as any).timestamps.length - 1]
+          const lastTime = Math.min(lastFileTime, logDataStore.currentTime)
           if (firstTime < minTime) minTime = firstTime
           if (lastTime > maxTime) maxTime = lastTime
         }

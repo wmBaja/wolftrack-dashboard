@@ -70,6 +70,11 @@ export const useLogDataStore = defineStore('logData', () => {
     dataVersion.value++
   }
 
+  function stopPlayback() {
+    isPlaying.value = false
+    if (reqFrame) cancelAnimationFrame(reqFrame)
+  }
+
   async function checkStatus() {
     try {
       const base = await getVisualizerBase()
@@ -140,9 +145,11 @@ export const useLogDataStore = defineStore('logData', () => {
     buffers,
     dataVersion,
     currentTime,
+    isPlaying,
     startPollingStatus,
     stopPolling,
     queryData,
-    clearBuffers
+    clearBuffers,
+    stopPlayback
   }
 })
