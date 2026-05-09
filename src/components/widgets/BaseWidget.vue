@@ -2,9 +2,11 @@
 <script setup lang="ts">
 import { ref, computed, h} from 'vue'
 import { useWidgetStore } from '@/stores/widgetStore'
+import { useDbcStore } from '@/stores/dbcStore'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import type { MenuOptions } from '@imengyu/vue3-context-menu'
 import type { WIDGET_TYPES } from '@/types/widgets'
+import SignalTree from '@/components/SignalTree.vue'
 
 interface Props {
   widgetId: string
@@ -18,12 +20,35 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const store = useWidgetStore()
+const dbcStore = useDbcStore()
 const widget = computed(() => store.getWidgetById(props.widgetId))
 
 const isEditing = ref(false)
 const isLoading = ref(false)
 const localTitle = ref('')
 const titleInputRef = ref<HTMLInputElement>()
+
+const isConfiguring = ref(false)
+const localSignals = ref<string[]>([...(widget.value?.signals || [])])
+
+function toggleConfig() {
+  isConfiguring.value = !isConfiguring.value
+  if (!isConfiguring.value) {
+    store.updateWidget(props.widgetId, { signals: [...localSignals.value] })
+  } else {
+    localSignals.value = [...(widget.value?.signals || [])]
+  }
+}
+
+function removeSignal(sig: string) {
+  localSignals.value = localSignals.value.filter(s => s !== sig)
+}
+
+function addSignalId(sigId: string) {
+  if (!localSignals.value.includes(sigId)) {
+    localSignals.value.push(sigId)
+  }
+}
 
 async function handleRefresh() {
   isLoading.value = true
@@ -74,6 +99,11 @@ function handleContextMenu(event: MouseEvent) {
 
   const menuItems: MenuOptions['items'] = [
     {
+      label: isConfiguring.value ? 'Close Config' : 'Configure Signals',
+      icon: h('span', '⚙️'),
+      onClick: toggleConfig,
+    },
+    {
       label: 'Edit Title',
       icon: h('span', '✏️'),
       onClick: startEditTitle,
@@ -123,7 +153,7 @@ function handleContextMenu(event: MouseEvent) {
   })
 }
 
-defineExpose({ handleRefresh, startEditTitle, setLoading })
+defineExpose({ handleRefresh, startEditTitle, setLoading, toggleConfig })
 </script>
 
 <template>
@@ -167,7 +197,24 @@ defineExpose({ handleRefresh, startEditTitle, setLoading })
 
     <!-- Widget Content -->
     <main class="base-widget__content">
+      <div v-if="isConfiguring" class="config-panel">
+        <h4>Signals Config</h4>
+        <div class="signal-list">
+          <div v-for="sig in localSignals" :key="sig" class="signal-tag">
+            {{ sig }}
+            <button @click="removeSignal(sig)">×</button>
+          </div>
+        </div>
+        <SignalTree
+          :signals="dbcStore.signals"
+          :selected-signals="localSignals"
+          @add="addSignalId"
+          @remove="removeSignal"
+        />
+        <button class="save-btn" @click="toggleConfig">Done</button>
+      </div>
       <slot
+        v-else
         :widget="widget"
         :is-loading="isLoading"
         :refresh="handleRefresh"
@@ -303,5 +350,53 @@ defineExpose({ handleRefresh, startEditTitle, setLoading })
   border-top: 3px solid var(--color-accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+/* Config Panel Styles */
+.config-panel {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.signal-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.signal-tag {
+  background: var(--color-accent);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.signal-tag button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.save-btn {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: var(--color-accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.save-btn:hover {
+  opacity: 0.9;
 }
 </style>

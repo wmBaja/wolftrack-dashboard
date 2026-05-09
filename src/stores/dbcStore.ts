@@ -4,6 +4,7 @@ import { getVisualizerBase } from '@/lib/visualizer'
 
 export interface DbcSignal {
   id: string
+  node: string
   message: string
   name: string
   unit: string
