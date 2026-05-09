@@ -7,6 +7,9 @@ import { useLiveDataStore } from '@/stores/liveDataStore'
 import { useLogDataStore } from '@/stores/logDataStore'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import type { AlignedData } from 'uplot'
+import type { RingBuffer } from '@/stores/liveDataStore'
+
+type LogBuffer = { timestamps: number[], values: number[] }
 
 const props = defineProps<{
   widgetId: string
@@ -60,17 +63,19 @@ function getAlignedData(): AlignedData {
   
   activeBuffers.forEach(buf => {
     if (isLive) {
-        if (buf && (buf as any).length > 0) {
-          const firstTime = (buf as any).timestamps[(buf as any).tail]
-          const lastIdx = ((buf as any).head - 1 + (buf as any).capacity) % (buf as any).capacity
-          const lastTime = (buf as any).timestamps[lastIdx]
+        const liveBuf = buf as RingBuffer | undefined
+        if (liveBuf && liveBuf.length > 0) {
+          const firstTime = liveBuf.timestamps[liveBuf.tail]!
+          const lastIdx = (liveBuf.head - 1 + liveBuf.capacity) % liveBuf.capacity
+          const lastTime = liveBuf.timestamps[lastIdx]!
           if (firstTime < minTime) minTime = firstTime
           if (lastTime > maxTime) maxTime = lastTime
         }
     } else {
-        if (buf && (buf as any).timestamps.length > 0) {
-          const firstTime = (buf as any).timestamps[0]
-          const lastFileTime = (buf as any).timestamps[(buf as any).timestamps.length - 1]
+        const logBuf = buf as LogBuffer | undefined
+        if (logBuf && logBuf.timestamps.length > 0) {
+          const firstTime = logBuf.timestamps[0]!
+          const lastFileTime = logBuf.timestamps[logBuf.timestamps.length - 1]!
           const lastTime = Math.min(lastFileTime, logDataStore.currentTime)
           if (firstTime < minTime) minTime = firstTime
           if (lastTime > maxTime) maxTime = lastTime
@@ -94,14 +99,14 @@ function getAlignedData(): AlignedData {
     const values = new Array(numBuckets).fill(null)
 
     if (buf) {
-      const ts = isLive ? (buf as any).getArrays().timestamps : (buf as any).timestamps
-      const vs = isLive ? (buf as any).getArrays().values : (buf as any).values
+      const ts = isLive ? (buf as RingBuffer).getArrays().timestamps : (buf as LogBuffer).timestamps
+      const vs = isLive ? (buf as RingBuffer).getArrays().values : (buf as LogBuffer).values
       
       const cutoff = isLive ? Infinity : logDataStore.currentTime
 
       if (ts.length > 0) {
           for (let i = 0; i < ts.length; i++) {
-            const t = ts[i]
+            const t = ts[i]!
             if (t > cutoff) break
             
             const v = vs[i]
@@ -119,32 +124,11 @@ function getAlignedData(): AlignedData {
   return aligned as AlignedData
 }
 
-const handleRefresh = async () => {
-  if (dataSourceStore.config.source === 'zmq') {
-      liveDataStore.clearBuffers()
-  } else {
-      queryLogData()
-  }
-}
-
-const queryLogData = () => {
-    if (dataSourceStore.config.source !== 'logfile' || logDataStore.status.status !== 'ready') return
-    const signals = widget.value?.signals || []
-    if (signals.length > 0) {
-        logDataStore.queryData(signals, logDataStore.status.start_ts, logDataStore.status.end_ts, 1000)
-    }
-}
-
-import { watch } from 'vue'
-watch(() => [logDataStore.status.status, widget.value?.signals, dataSourceStore.config.source], () => {
-    queryLogData()
-})
-
 const startEditTitle = () => {
   baseWidgetRef.value?.startEditTitle()
 }
 
-defineExpose({ handleRefresh, startEditTitle })
+defineExpose({ startEditTitle })
 </script>
 
 <template>
