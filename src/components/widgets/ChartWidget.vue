@@ -4,6 +4,8 @@ import BaseWidget from '@/components/widgets/BaseWidget.vue'
 import UplotChart from '@/components/UplotChart.vue'
 import { useWidgetStore } from '@/stores/widgetStore'
 import { useLiveDataStore } from '@/stores/liveDataStore'
+import { useLogDataStore } from '@/stores/logDataStore'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 import type { AlignedData } from 'uplot'
 
 const props = defineProps<{
@@ -12,59 +14,89 @@ const props = defineProps<{
 
 const widgetStore = useWidgetStore()
 const liveDataStore = useLiveDataStore()
+const logDataStore = useLogDataStore()
+const dataSourceStore = useDataSourceStore()
 
 const baseWidgetRef = ref<InstanceType<typeof BaseWidget>>()
 const widget = computed(() => widgetStore.getWidgetById(props.widgetId))
 
 function getAlignedData(): AlignedData {
+  const isLive = dataSourceStore.config.source === 'zmq'
   const signalsToPlot = widget.value?.signals || []
   if (signalsToPlot.length === 0) return [[]]
 
-  // If there's only 1 signal, no need to align, just return it directly
   if (signalsToPlot.length === 1) {
     const firstSig = signalsToPlot[0]
     if (!firstSig) return [[]]
-    const sigData = liveDataStore.buffers[firstSig]
-    if (!sigData || sigData.timestamps.length === 0) return [[], []]
-    return [sigData.timestamps, sigData.values]
+    
+    if (isLive) {
+        const buf = liveDataStore.buffers.get(firstSig)
+        if (!buf || buf.length === 0) return [[], []]
+        const { timestamps, values } = buf.getArrays()
+        return [Array.from(timestamps), Array.from(values)]
+    } else {
+        const buf = logDataStore.buffers[firstSig]
+        if (!buf) return [[], []]
+        return [buf.timestamps, buf.values]
+    }
   }
 
-  // Multi-signal alignment: Collect all unique timestamps sorted
-  const allTimestamps = new Set<number>()
-  signalsToPlot.forEach(sig => {
-    const sigData = liveDataStore.buffers[sig]
-    if (sigData) {
-      sigData.timestamps.forEach(t => allTimestamps.add(t))
+  // Multi-signal alignment: O(N) bucket sampling
+  let minTime = Infinity
+  let maxTime = -Infinity
+
+  const activeBuffers = isLive 
+    ? signalsToPlot.map(sig => liveDataStore.buffers.get(sig))
+    : signalsToPlot.map(sig => logDataStore.buffers[sig])
+  
+  activeBuffers.forEach(buf => {
+    if (isLive) {
+        if (buf && (buf as any).length > 0) {
+          const firstTime = (buf as any).timestamps[(buf as any).tail]
+          const lastIdx = ((buf as any).head - 1 + (buf as any).capacity) % (buf as any).capacity
+          const lastTime = (buf as any).timestamps[lastIdx]
+          if (firstTime < minTime) minTime = firstTime
+          if (lastTime > maxTime) maxTime = lastTime
+        }
+    } else {
+        if (buf && (buf as any).timestamps.length > 0) {
+          const firstTime = (buf as any).timestamps[0]
+          const lastTime = (buf as any).timestamps[(buf as any).timestamps.length - 1]
+          if (firstTime < minTime) minTime = firstTime
+          if (lastTime > maxTime) maxTime = lastTime
+        }
     }
   })
 
-  const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b)
+  if (minTime === Infinity) return [[]]
 
-  const aligned: (number | null)[][] = [sortedTimestamps]
+  const numBuckets = 1000 // roughly 2x pixel width
+  const bucketSize = (maxTime - minTime) / numBuckets || 0.001
 
-  signalsToPlot.forEach(sig => {
-    const sigData = liveDataStore.buffers[sig]
-    const values = new Array(sortedTimestamps.length).fill(null)
+  const alignedTimestamps = new Array(numBuckets)
+  for (let i = 0; i < numBuckets; i++) {
+    alignedTimestamps[i] = minTime + i * bucketSize
+  }
 
-    if (sigData && sigData.timestamps.length > 0) {
-      let ptr = 0
-      for (let i = 0; i < sortedTimestamps.length; i++) {
-        const targetTime = sortedTimestamps[i]
-        if (targetTime === undefined) continue
+  const aligned: (number | null)[][] = [alignedTimestamps]
 
-        while (ptr < sigData.timestamps.length - 1) {
-          const nextTime = sigData.timestamps[ptr + 1]
-          if (nextTime !== undefined && nextTime <= targetTime) {
-            ptr++
-          } else {
-            break
+  activeBuffers.forEach(buf => {
+    const values = new Array(numBuckets).fill(null)
+
+    if (buf) {
+      const ts = isLive ? (buf as any).getArrays().timestamps : (buf as any).timestamps
+      const vs = isLive ? (buf as any).getArrays().values : (buf as any).values
+      
+      if (ts.length > 0) {
+          for (let i = 0; i < ts.length; i++) {
+            const t = ts[i]
+            const v = vs[i]
+            let bucketIdx = Math.floor((t - minTime) / bucketSize)
+            if (bucketIdx >= numBuckets) bucketIdx = numBuckets - 1
+            if (bucketIdx >= 0) {
+                values[bucketIdx] = v // keep last value in bucket
+            }
           }
-        }
-
-        const currTime = sigData.timestamps[ptr]
-        if (currTime === targetTime) {
-            values[i] = sigData.values[ptr]
-        }
       }
     }
     aligned.push(values)
@@ -74,8 +106,25 @@ function getAlignedData(): AlignedData {
 }
 
 const handleRefresh = async () => {
-  liveDataStore.clearBuffers()
+  if (dataSourceStore.config.source === 'zmq') {
+      liveDataStore.clearBuffers()
+  } else {
+      queryLogData()
+  }
 }
+
+const queryLogData = () => {
+    if (dataSourceStore.config.source !== 'logfile' || logDataStore.status.status !== 'ready') return
+    const signals = widget.value?.signals || []
+    if (signals.length > 0) {
+        logDataStore.queryData(signals, logDataStore.status.start_ts, logDataStore.status.end_ts, 1000)
+    }
+}
+
+import { watch } from 'vue'
+watch(() => [logDataStore.status.status, widget.value?.signals, dataSourceStore.config.source], () => {
+    queryLogData()
+})
 
 const startEditTitle = () => {
   baseWidgetRef.value?.startEditTitle()
@@ -100,8 +149,8 @@ defineExpose({ handleRefresh, startEditTitle })
           v-else
           :signals="widget?.signals || []"
           :get-data="getAlignedData"
-          :update-version="liveDataStore.dataVersion"
-          :time-origin="liveDataStore.sessionStartTimestamp"
+          :update-version="dataSourceStore.config.source === 'zmq' ? liveDataStore.dataVersion : logDataStore.dataVersion"
+          :time-origin="dataSourceStore.config.source === 'zmq' ? liveDataStore.sessionStartTimestamp : logDataStore.status.start_ts"
         />
       </div>
     </template>
