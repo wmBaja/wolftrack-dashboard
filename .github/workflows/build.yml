@@ -34,15 +34,19 @@ jobs:
           mkdir -p dashboard/backend
           TAG="${{ steps.backend-tag.outputs.tag }}"
 
-          if ! gh release view "$TAG" --repo wmBaja/wolftrack-visualizer > /dev/null 2>&1; then
-            echo "Error: Release '$TAG' not found in wmBaja/wolftrack-visualizer"
-            exit 1
-          fi
-
           if [ "${{ runner.os }}" == "Windows" ]; then
             gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer.exe" --dir dashboard/backend
+            mv dashboard/backend/wolftrack-visualizer-windows.exe dashboard/backend/wolftrack-visualizer.exe
+            
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer-mac" --dir dashboard/backend
+            mv dashboard/backend/wolftrack-visualizer-mac dashboard/backend/wolftrack-visualizer
+            chmod +x dashboard/backend/wolftrack-visualizer
+            
           else
-            gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer" --dir dashboard/backend
+            # Linux fallback
+            gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer-linux" --dir dashboard/backend
+            mv dashboard/backend/wolftrack-visualizer-linux dashboard/backend/wolftrack-visualizer
             chmod +x dashboard/backend/wolftrack-visualizer
           fi
         env:
