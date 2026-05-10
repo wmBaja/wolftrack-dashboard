@@ -108,7 +108,9 @@ async function connectToDaq() {
   const connected = await daqConnection.connect({ autostart: isResumingReadyStream })
   if (connected) {
     await dbcStore.fetchSignals()
-    isOpen.value = false
+    if (isResumingReadyStream) {
+      isOpen.value = false
+    }
   }
 }
 
