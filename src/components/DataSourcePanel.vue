@@ -487,132 +487,42 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 
 <style scoped>
 :global(:root) {
-  --data-source-trigger-gap: 8px;
-  --data-source-trigger-padding-block: 6px;
-  --data-source-trigger-padding-inline: 12px;
-  --data-source-trigger-radius: 8px;
-  --data-source-trigger-font-size: 13px;
-  --data-source-trigger-hover-bg: rgba(255, 255, 255, 0.09);
-  --data-source-trigger-hover-border: rgba(255, 255, 255, 0.12);
-  --data-source-status-dot-size: 8px;
-  --data-source-trigger-status-font-size: 11px;
-  --data-source-trigger-chevron-opacity: 0.5;
-  --data-source-backdrop-bg: rgba(0, 0, 0, 0.4);
-  --data-source-backdrop-z-index: 40;
-  --data-source-panel-offset-top: 8px;
-  --data-source-panel-offset-right: 16px;
-  --data-source-panel-width: 420px;
-  --data-source-panel-mobile-margin: 24px;
-  --data-source-panel-max-height-offset: 24px;
+  --data-source-space-sm: 8px;
+  --data-source-radius-sm: 8px;
+  --data-source-control-padding: 8px 11px;
+  --data-source-control-font-size: 12px;
+  --data-source-control-bg: rgba(0, 0, 0, 0.25);
+  --data-source-subtle-surface: rgba(255, 255, 255, 0.04);
   --data-source-panel-border: rgba(255, 255, 255, 0.08);
-  --data-source-panel-border-radius: 14px;
   --data-source-panel-shadow: 0 24px 56px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --data-source-panel-z-index: 50;
-  --data-source-panel-padding: 20px;
-  --data-source-panel-gap: 18px;
-  --data-source-panel-title-font-size: 15px;
-  --data-source-panel-status-font-size: 11px;
-  --data-source-panel-status-letter-spacing: 0.02em;
-  --data-source-panel-status-margin-top: 3px;
-  --data-source-close-button-font-size: 15px;
-  --data-source-close-button-padding-block: 2px;
-  --data-source-close-button-padding-inline: 6px;
-  --data-source-close-button-radius: 6px;
-  --data-source-transition-fast: 0.15s;
-  --data-source-transition-medium: 0.18s;
-  --data-source-transition-slow: 0.3s;
-  --data-source-error-banner-gap: 8px;
-  --data-source-error-banner-padding-block: 10px;
-  --data-source-error-banner-padding-inline: 12px;
-  --data-source-error-banner-radius: 8px;
-  --data-source-error-banner-font-size: 12px;
-  --data-source-error-banner-icon-offset: 1px;
-  --data-source-field-group-gap: 7px;
-  --data-source-field-label-font-size: 12px;
-  --data-source-field-label-letter-spacing: 0.05em;
-  --data-source-required-margin-left: 2px;
-  --data-source-optional-opacity: 0.7;
-  --data-source-field-hint-font-size: 11px;
-  --data-source-toggle-gap: 8px;
-  --data-source-toggle-button-gap: 6px;
-  --data-source-toggle-button-padding-block: 9px;
-  --data-source-toggle-button-padding-inline: 12px;
-  --data-source-toggle-button-radius: 8px;
-  --data-source-toggle-button-font-size: 13px;
-  --data-source-toggle-button-bg: rgba(255, 255, 255, 0.04);
-  --data-source-row-gap: 8px;
-  --data-source-input-padding-block: 8px;
-  --data-source-input-padding-inline: 11px;
-  --data-source-input-bg: rgba(0, 0, 0, 0.25);
-  --data-source-input-radius: 8px;
-  --data-source-input-font-size: 12px;
-  --data-source-port-width: 88px;
-  --data-source-browse-group-gap: 4px;
-  --data-source-inline-button-padding-block: 7px;
-  --data-source-inline-button-padding-inline: 12px;
-  --data-source-inline-button-radius: 7px;
-  --data-source-inline-button-font-size: 12px;
-  --data-source-inline-button-hover-bg: rgba(59, 130, 246, 0.22);
-  --data-source-clear-button-padding-block: 7px;
-  --data-source-clear-button-padding-inline: 9px;
-  --data-source-clear-button-radius: 7px;
-  --data-source-clear-button-font-size: 12px;
-  --data-source-clear-button-hover-bg: rgba(239, 68, 68, 0.18);
-  --data-source-chip-padding-block: 7px;
-  --data-source-chip-padding-inline: 10px;
-  --data-source-chip-radius: 999px;
-  --data-source-chip-font-size: 12px;
-  --data-source-chip-bg: rgba(255, 255, 255, 0.04);
-  --data-source-health-card-padding: 10px;
-  --data-source-health-card-radius: 10px;
-  --data-source-health-card-gap: 4px;
-  --data-source-health-card-bg: rgba(255, 255, 255, 0.03);
-  --data-source-slider-height: 4px;
-  --data-source-speed-input-width: 62px;
-  --data-source-panel-footer-padding-top: 6px;
-  --data-source-panel-footer-border: rgba(255, 255, 255, 0.06);
-  --data-source-action-button-padding-block: 8px;
-  --data-source-action-button-padding-inline: 16px;
-  --data-source-action-button-radius: 8px;
-  --data-source-action-button-font-size: 13px;
-  --data-source-action-button-gap: 6px;
-  --data-source-disabled-opacity: 0.45;
-  --data-source-action-button-primary-text: #fff;
-  --data-source-action-button-primary-hover-bg: #2563eb;
-  --data-source-action-button-secondary-bg: rgba(255, 255, 255, 0.06);
-  --data-source-action-button-danger-hover-bg: rgba(239, 68, 68, 0.2);
-  --data-source-slide-enter-duration: 0.2s;
-  --data-source-slide-leave-duration: 0.15s;
-  --data-source-slide-from-translate-y: -6px;
-  --data-source-slide-from-scale: 0.98;
-  --data-source-mobile-inset: 12px;
+  --data-source-footer-border: rgba(255, 255, 255, 0.06);
 }
 
 .datasource-trigger {
   display: flex;
   align-items: center;
-  gap: var(--data-source-trigger-gap);
-  padding: var(--data-source-trigger-padding-block) var(--data-source-trigger-padding-inline);
+  gap: var(--data-source-space-sm);
+  padding: 6px 12px;
   background: var(--color-hover);
   border: 1px solid var(--color-border);
-  border-radius: var(--data-source-trigger-radius);
+  border-radius: var(--data-source-radius-sm);
   color: var(--color-text);
-  font-size: var(--data-source-trigger-font-size);
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--data-source-transition-fast), border-color var(--data-source-transition-fast);
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .datasource-trigger:hover {
-  background: var(--data-source-trigger-hover-bg);
-  border-color: var(--data-source-trigger-hover-border);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .status-dot {
-  width: var(--data-source-status-dot-size);
-  height: var(--data-source-status-dot-size);
+  width: var(--data-source-space-sm);
+  height: var(--data-source-space-sm);
   border-radius: 50%;
-  transition: background var(--data-source-transition-slow);
+  transition: background 0.3s;
 }
 
 .trigger-label {
@@ -620,37 +530,37 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .trigger-status {
-  font-size: var(--data-source-trigger-status-font-size);
+  font-size: 11px;
   color: var(--color-muted);
 }
 
 .chevron {
-  opacity: var(--data-source-trigger-chevron-opacity);
+  opacity: 0.5;
 }
 
 .backdrop {
   position: fixed;
   inset: 0;
-  background: var(--data-source-backdrop-bg);
-  z-index: var(--data-source-backdrop-z-index);
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 40;
 }
 
 .config-panel {
   position: fixed;
-  top: calc(var(--navbar-height) + var(--data-source-panel-offset-top));
-  right: var(--data-source-panel-offset-right);
-  width: min(var(--data-source-panel-width), calc(100vw - var(--data-source-panel-mobile-margin)));
-  max-height: calc(100vh - var(--navbar-height) - var(--data-source-panel-max-height-offset));
+  top: calc(var(--navbar-height) + var(--data-source-space-sm));
+  right: 16px;
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100vh - var(--navbar-height) - 24px);
   overflow-y: auto;
   background: var(--color-panel);
   border: 1px solid var(--data-source-panel-border);
-  border-radius: var(--data-source-panel-border-radius);
+  border-radius: 14px;
   box-shadow: var(--data-source-panel-shadow);
-  z-index: var(--data-source-panel-z-index);
-  padding: var(--data-source-panel-padding);
+  z-index: 50;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: var(--data-source-panel-gap);
+  gap: 18px;
 }
 
 .panel-header {
@@ -660,16 +570,16 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .panel-title {
-  font-size: var(--data-source-panel-title-font-size);
+  font-size: 15px;
   font-weight: 700;
   color: var(--color-text);
 }
 
 .panel-status {
-  font-size: var(--data-source-panel-status-font-size);
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: var(--data-source-panel-status-letter-spacing);
-  margin-top: var(--data-source-panel-status-margin-top);
+  letter-spacing: 0.02em;
+  margin-top: 3px;
   display: block;
 }
 
@@ -678,10 +588,10 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   border: none;
   color: var(--color-muted);
   cursor: pointer;
-  font-size: var(--data-source-close-button-font-size);
-  padding: var(--data-source-close-button-padding-block) var(--data-source-close-button-padding-inline);
-  border-radius: var(--data-source-close-button-radius);
-  transition: color var(--data-source-transition-fast), background var(--data-source-transition-fast);
+  font-size: 15px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
 }
 
 .close-btn:hover {
@@ -692,56 +602,56 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .error-banner {
   display: flex;
   align-items: flex-start;
-  gap: var(--data-source-error-banner-gap);
-  padding: var(--data-source-error-banner-padding-block) var(--data-source-error-banner-padding-inline);
+  gap: var(--data-source-space-sm);
+  padding: 10px 12px;
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
-  border-radius: var(--data-source-error-banner-radius);
-  font-size: var(--data-source-error-banner-font-size);
+  border-radius: var(--data-source-radius-sm);
+  font-size: var(--data-source-control-font-size);
   color: var(--color-danger-text);
   line-height: 1.5;
 }
 
 .error-banner svg {
   flex-shrink: 0;
-  margin-top: var(--data-source-error-banner-icon-offset);
+  margin-top: 1px;
 }
 
 .field-group {
   display: flex;
   flex-direction: column;
-  gap: var(--data-source-field-group-gap);
+  gap: 7px;
 }
 
 .field-label {
-  font-size: var(--data-source-field-label-font-size);
+  font-size: var(--data-source-control-font-size);
   font-weight: 600;
   color: var(--color-muted);
   text-transform: uppercase;
-  letter-spacing: var(--data-source-field-label-letter-spacing);
+  letter-spacing: 0.05em;
 }
 
 .required {
   color: var(--color-danger);
-  margin-left: var(--data-source-required-margin-left);
+  margin-left: 2px;
 }
 
 .optional {
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  opacity: var(--data-source-optional-opacity);
+  opacity: 0.7;
 }
 
 .field-hint {
-  font-size: var(--data-source-field-hint-font-size);
+  font-size: 11px;
   color: var(--color-muted);
   margin: 0;
 }
 
 .toggle-group {
   display: flex;
-  gap: var(--data-source-toggle-gap);
+  gap: var(--data-source-space-sm);
 }
 
 .toggle-btn {
@@ -749,16 +659,16 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--data-source-toggle-button-gap);
-  padding: var(--data-source-toggle-button-padding-block) var(--data-source-toggle-button-padding-inline);
-  background: var(--data-source-toggle-button-bg);
+  gap: 6px;
+  padding: 9px 12px;
+  background: var(--data-source-subtle-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--data-source-toggle-button-radius);
+  border-radius: var(--data-source-radius-sm);
   color: var(--color-muted);
-  font-size: var(--data-source-toggle-button-font-size);
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--data-source-transition-fast);
+  transition: all 0.15s;
 }
 
 .toggle-btn:hover {
@@ -777,20 +687,20 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .speed-row {
   display: flex;
   align-items: center;
-  gap: var(--data-source-row-gap);
+  gap: var(--data-source-space-sm);
 }
 
 .text-input,
 .port-input,
 .speed-input {
   min-width: 0;
-  padding: var(--data-source-input-padding-block) var(--data-source-input-padding-inline);
-  background: var(--data-source-input-bg);
+  padding: var(--data-source-control-padding);
+  background: var(--data-source-control-bg);
   border: 1px solid var(--color-border);
-  border-radius: var(--data-source-input-radius);
-  font-size: var(--data-source-input-font-size);
+  border-radius: var(--data-source-radius-sm);
+  font-size: var(--data-source-control-font-size);
   color: var(--color-text);
-  transition: border-color var(--data-source-transition-fast);
+  transition: border-color 0.15s;
 }
 
 .text-input {
@@ -814,7 +724,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .port-input {
-  width: var(--data-source-port-width);
+  width: 88px;
 }
 
 .browse-btn-wrapper {
@@ -832,62 +742,62 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 
 .browse-btn-group {
   display: flex;
-  gap: var(--data-source-browse-group-gap);
+  gap: 4px;
 }
 
 .browse-btn,
 .secondary-inline-btn {
-  padding: var(--data-source-inline-button-padding-block) var(--data-source-inline-button-padding-inline);
+  padding: 7px 12px;
   background: var(--color-blue-bg-glow);
   border: 1px solid var(--color-blue-border);
-  border-radius: var(--data-source-inline-button-radius);
+  border-radius: 7px;
   color: var(--color-blue-text);
-  font-size: var(--data-source-inline-button-font-size);
+  font-size: var(--data-source-control-font-size);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: all var(--data-source-transition-fast);
+  transition: all 0.15s;
 }
 
 .browse-btn:hover,
 .secondary-inline-btn:hover {
-  background: var(--data-source-inline-button-hover-bg);
+  background: rgba(59, 130, 246, 0.22);
 }
 
 .secondary-inline-btn:disabled,
 .browse-btn:disabled {
-  opacity: var(--data-source-disabled-opacity);
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .clear-btn {
-  padding: var(--data-source-clear-button-padding-block) var(--data-source-clear-button-padding-inline);
+  padding: 7px 9px;
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
-  border-radius: var(--data-source-clear-button-radius);
+  border-radius: 7px;
   color: var(--color-danger-text);
-  font-size: var(--data-source-clear-button-font-size);
+  font-size: var(--data-source-control-font-size);
   cursor: pointer;
-  transition: all var(--data-source-transition-fast);
+  transition: all 0.15s;
 }
 
 .clear-btn:hover {
-  background: var(--data-source-clear-button-hover-bg);
+  background: rgba(239, 68, 68, 0.18);
 }
 
 .chip-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--data-source-row-gap);
+  gap: var(--data-source-space-sm);
 }
 
 .chip-btn {
-  padding: var(--data-source-chip-padding-block) var(--data-source-chip-padding-inline);
-  border-radius: var(--data-source-chip-radius);
+  padding: 7px 10px;
+  border-radius: 999px;
   border: 1px solid var(--color-border);
-  background: var(--data-source-chip-bg);
+  background: var(--data-source-subtle-surface);
   color: var(--color-text);
-  font-size: var(--data-source-chip-font-size);
+  font-size: var(--data-source-control-font-size);
   cursor: pointer;
 }
 
@@ -900,35 +810,35 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .health-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--data-source-row-gap);
+  gap: var(--data-source-space-sm);
 }
 
 .health-card {
-  padding: var(--data-source-health-card-padding);
-  border-radius: var(--data-source-health-card-radius);
+  padding: 10px;
+  border-radius: 10px;
   border: 1px solid var(--color-border);
-  background: var(--data-source-health-card-bg);
+  background: rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
-  gap: var(--data-source-health-card-gap);
+  gap: 4px;
 }
 
 .health-label {
-  font-size: var(--data-source-field-hint-font-size);
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: var(--data-source-field-label-letter-spacing);
+  letter-spacing: 0.05em;
   color: var(--color-muted);
 }
 
 .speed-slider {
   flex: 1;
   accent-color: var(--color-accent);
-  height: var(--data-source-slider-height);
+  height: 4px;
   cursor: pointer;
 }
 
 .speed-input {
-  width: var(--data-source-speed-input-width);
+  width: 62px;
   text-align: center;
 }
 
@@ -936,46 +846,46 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--data-source-row-gap);
-  padding-top: var(--data-source-panel-footer-padding-top);
-  border-top: 1px solid var(--data-source-panel-footer-border);
+  gap: var(--data-source-space-sm);
+  padding-top: 6px;
+  border-top: 1px solid var(--data-source-footer-border);
 }
 
 .footer-right {
   display: flex;
-  gap: var(--data-source-row-gap);
+  gap: var(--data-source-space-sm);
   margin-left: auto;
 }
 
 .action-btn {
-  padding: var(--data-source-action-button-padding-block) var(--data-source-action-button-padding-inline);
-  border-radius: var(--data-source-action-button-radius);
-  font-size: var(--data-source-action-button-font-size);
+  padding: 8px 16px;
+  border-radius: var(--data-source-radius-sm);
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   border: none;
   display: flex;
   align-items: center;
-  gap: var(--data-source-action-button-gap);
-  transition: all var(--data-source-transition-fast);
+  gap: 6px;
+  transition: all 0.15s;
 }
 
 .action-btn:disabled {
-  opacity: var(--data-source-disabled-opacity);
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .action-btn.primary {
   background: var(--color-accent);
-  color: var(--data-source-action-button-primary-text);
+  color: #fff;
 }
 
 .action-btn.primary:hover:not(:disabled) {
-  background: var(--data-source-action-button-primary-hover-bg);
+  background: #2563eb;
 }
 
 .action-btn.secondary {
-  background: var(--data-source-action-button-secondary-bg);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--color-text);
   border: 1px solid var(--color-border);
 }
@@ -991,12 +901,12 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .action-btn.danger:hover:not(:disabled) {
-  background: var(--data-source-action-button-danger-hover-bg);
+  background: rgba(239, 68, 68, 0.2);
 }
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity var(--data-source-transition-medium) ease;
+  transition: opacity 0.18s ease;
 }
 
 .fade-enter-from,
@@ -1005,17 +915,17 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .slide-down-enter-active {
-  animation: slideDown var(--data-source-slide-enter-duration) ease;
+  animation: slideDown 0.2s ease;
 }
 
 .slide-down-leave-active {
-  animation: slideDown var(--data-source-slide-leave-duration) ease reverse;
+  animation: slideDown 0.15s ease reverse;
 }
 
 @keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(var(--data-source-slide-from-translate-y)) scale(var(--data-source-slide-from-scale));
+    transform: translateY(-6px) scale(0.98);
   }
 
   to {
@@ -1026,8 +936,8 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 
 @media (max-width: 640px) {
   .config-panel {
-    right: var(--data-source-mobile-inset);
-    left: var(--data-source-mobile-inset);
+    right: 12px;
+    left: 12px;
     width: auto;
   }
 
