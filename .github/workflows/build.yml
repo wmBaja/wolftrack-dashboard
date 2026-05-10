@@ -36,7 +36,6 @@ jobs:
 
           if [ "${{ runner.os }}" == "Windows" ]; then
             gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer.exe" --dir dashboard/backend
-            mv dashboard/backend/wolftrack-visualizer-windows.exe dashboard/backend/wolftrack-visualizer.exe
             
           elif [ "${{ runner.os }}" == "macOS" ]; then
             gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer-mac" --dir dashboard/backend
