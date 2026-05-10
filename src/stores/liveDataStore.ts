@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, markRaw, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useDataSourceStore } from './dataSourceStore'
 import { useDaqConnectionStore } from './daqConnectionStore'
 import { useWidgetStore } from './widgetStore'
@@ -63,13 +63,13 @@ export const useLiveDataStore = defineStore('liveData', () => {
   const isConnected = ref(false)
   const isConnecting = ref(false)
   const sessionStartTimestamp = ref<number | null>(null)
-  
+
   // Non-reactive buffers for extreme performance
   const buffers = new Map<string, RingBuffer>()
-  
+
   // Expose a dataVersion tick for charts that still want reactivity
   const dataVersion = ref(0)
-  
+
   let ws: WebSocket | null = null
 
   function getActiveSignals() {
@@ -120,7 +120,7 @@ export const useLiveDataStore = defineStore('liveData', () => {
     ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data)
-        
+
         if (payload.type === 'live_source' || payload.type === 'status') {
           const dataSource = useDataSourceStore()
           const daqConnection = useDaqConnectionStore()
@@ -137,7 +137,7 @@ export const useLiveDataStore = defineStore('liveData', () => {
             const typedData = data as { timestamps: number[], values: number[] }
             if (!buffers.has(signalId)) {
               // 10000 capacity per signal gives plenty of room for 100Hz for 15s (1500 pts)
-              buffers.set(signalId, new RingBuffer(10000)) 
+              buffers.set(signalId, new RingBuffer(10000))
             }
 
             const buffer = buffers.get(signalId)!
