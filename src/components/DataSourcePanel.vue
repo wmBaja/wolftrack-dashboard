@@ -4,11 +4,25 @@ import { useDataSourceStore } from '@/stores/dataSourceStore'
 import { useDaqConnectionStore, type DaqTarget } from '@/stores/daqConnectionStore'
 import { useDbcStore } from '@/stores/dbcStore'
 import { useLiveDataStore } from '@/stores/liveDataStore'
+import { useLogDataStore } from '@/stores/logDataStore'
+import { watch } from 'vue'
 
 const dataSource = useDataSourceStore()
 const daqConnection = useDaqConnectionStore()
 const dbcStore = useDbcStore()
 const liveData = useLiveDataStore()
+const logData = useLogDataStore()
+
+watch(() => [dataSource.config.source, dataSource.status], ([source, status]) => {
+  if (source === 'logfile' && status === 'running') {
+    logData.startPollingStatus()
+  } else {
+    logData.stopPolling()
+    if (source === 'logfile' && status !== 'running') {
+      logData.stopPlayback()
+    }
+  }
+}, { immediate: true })
 
 const isOpen = ref(false)
 const sourceMode = ref<'zmq' | 'logfile'>(dataSource.config.source)
@@ -155,6 +169,13 @@ const daqPrimaryActionLabel = computed(() => {
 })
 
 const daqStatusColor = computed(() => {
+  if (dataSource.config.source === 'logfile') {
+    if (logData.status.status === 'loading') return 'var(--color-warning)'
+    if (logData.status.status === 'ready' && logData.isPlaying) return 'var(--color-success)'
+    if (logData.status.status === 'ready') return 'var(--color-blue-text)'
+    return 'var(--color-muted)'
+  }
+
   switch (daqConnection.connectionState) {
     case 'connected':
       return 'var(--color-success)'
@@ -172,6 +193,16 @@ const daqStatusColor = computed(() => {
 })
 
 const daqStatusLabel = computed(() => {
+  if (dataSource.config.source === 'logfile') {
+    if (logData.status.status === 'loading') return 'Indexing'
+    if (logData.status.status === 'ready') {
+      if (logData.isPlaying) return 'Playing'
+      if (logData.currentTime >= logData.status.end_ts && logData.status.end_ts > 0) return 'Finished'
+      return 'Ready'
+    }
+    return 'Idle'
+  }
+
   switch (daqConnection.connectionState) {
     case 'connected':
       return 'Streaming'
@@ -241,7 +272,12 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
       <div class="panel-header">
         <div>
           <h2 class="panel-title">Data Source</h2>
-          <span class="panel-status" :style="{ color: daqStatusColor }">● DAQ {{ daqStatusLabel }}</span>
+          <span v-if="sourceMode === 'zmq'" class="panel-status" :style="{ color: daqStatusColor }">● DAQ {{ daqStatusLabel }}</span>
+          <span v-else class="panel-status" style="color: var(--color-blue-text)">
+            ● Log File 
+            <span v-if="logData.status.status === 'loading'">Indexing ({{ logData.status.progress }}%)</span>
+            <span v-else-if="logData.status.status === 'ready'">Indexed</span>
+          </span>
         </div>
         <button class="close-btn" @click="isOpen = false" aria-label="Close">×</button>
       </div>
