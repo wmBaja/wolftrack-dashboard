@@ -1,6 +1,6 @@
 {
   "name": "wolftrack",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "main": "dist-electron/main.js",
   "type": "module",
   "engines": {
@@ -47,7 +47,8 @@
       "target": "nsis"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "icon": "assets/icon.png"
     }
   },
   "dependencies": {
