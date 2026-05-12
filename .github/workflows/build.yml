@@ -27,7 +27,7 @@ jobs:
         id: backend-tag
         run: |
           if [ "${{ github.ref_name }}" == "main" ]; then
-            LATEST_TAG=$(gh release view --repo wmBaja/wolftrack-visualizer --json tagName | jq -r .tagName)
+            LATEST_TAG=$(gh release view --repo wmBaja/wolftrack-visualizer --json tagName --jq -r .tagName)
             echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
           else
             echo "tag=nightly" >> $GITHUB_OUTPUT
