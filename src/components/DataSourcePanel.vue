@@ -80,7 +80,6 @@ async function applyLogfileConfig() {
 
   if (dataSource.status !== 'error') {
     await dbcStore.fetchSignals()
-    isOpen.value = false
   }
 }
 
@@ -108,25 +107,19 @@ async function connectToDaq() {
   const connected = await daqConnection.connect({ autostart: isResumingReadyStream })
   if (connected) {
     await dbcStore.fetchSignals()
-    if (isResumingReadyStream) {
-      isOpen.value = false
-    }
   }
 }
 
 async function stopDaqStreaming() {
   await daqConnection.stopStreaming()
-  isOpen.value = false
 }
 
 async function disconnectDaq() {
   await daqConnection.disconnect()
-  isOpen.value = false
 }
 
 async function stopDataSource() {
   await dataSource.stop()
-  isOpen.value = false
 }
 
 async function discoverDaqs() {
