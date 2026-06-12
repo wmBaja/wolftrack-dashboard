@@ -148,6 +148,10 @@ const canDisconnectDaq = computed(() => {
   return daqConnection.connectionState === 'connected' || daqConnection.connectionState === 'ready'
 })
 
+const isLiveBufferWindowLocked = computed(() => {
+  return sourceMode.value === 'zmq' && daqConnection.isConnected
+})
+
 const daqPrimaryActionLabel = computed(() => {
   if (isBusy.value) {
     return canStartReadyStream.value ? 'Starting...' : 'Connecting...'
@@ -318,6 +322,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
               step="0.5"
               v-model.number="liveBufferWindowSeconds"
               class="speed-slider"
+              :disabled="isLiveBufferWindowLocked"
             />
             <input
               id="live-buffer-window-number-input"
@@ -326,6 +331,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
               step="0.5"
               v-model.number="liveBufferWindowSeconds"
               class="speed-input"
+              :disabled="isLiveBufferWindowLocked"
               aria-label="Live buffer window seconds"
             />
           </div>
@@ -842,6 +848,12 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .speed-input {
   width: 62px;
   text-align: center;
+}
+
+.speed-slider:disabled,
+.speed-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .panel-footer {
