@@ -119,9 +119,9 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
   const health = ref<LoggerHealthResponse | null>(null)
   const loggingActive = ref(false)
   const loggingStatus = ref<DaqLoggingStatus>('idle')
-  let connectionPollTimer: number | null = null
-  let missedConnectionPolls = 0
-  let isConnectionPollInFlight = false
+  let daqHealthPollTimer: number | null = null
+  let missedDaqHealthPolls = 0
+  let isDaqHealthPollInFlight = false
 
   const isConnected = computed(() => connectionState.value === 'connected')
   const isReady = computed(() => connectionState.value === 'ready')
@@ -150,11 +150,11 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     loggingStatus.value = nextHealth.session ? 'active' : 'idle'
   }
 
-  function resetConnectionPollMisses() {
-    missedConnectionPolls = 0
+  function resetDaqHealthPollMisses() {
+    missedDaqHealthPolls = 0
   }
 
-  function isConnectionPollableState() {
+  function isDaqHealthPollableState() {
     return connectionState.value === 'ready' || connectionState.value === 'connected'
   }
 
@@ -188,12 +188,12 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     await disconnectVisualizerLiveSourceBestEffort()
   }
 
-  async function pollDaqConnection() {
-    if (isConnectionPollInFlight) {
+  async function pollDaqHealth() {
+    if (isDaqHealthPollInFlight) {
       return
     }
 
-    if (!isConnectionPollableState()) {
+    if (!isDaqHealthPollableState()) {
       if (connectionState.value === 'disconnected' || connectionState.value === 'error') {
         stopConnectionPolling()
       }
@@ -206,46 +206,46 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       return
     }
 
-    isConnectionPollInFlight = true
+    isDaqHealthPollInFlight = true
 
     try {
       await fetchLoggerHealth(nextTarget)
-      resetConnectionPollMisses()
+      resetDaqHealthPollMisses()
       error.value = null
     } catch {
-      missedConnectionPolls++
-      if (missedConnectionPolls >= MAX_MISSED_CONNECTION_POLLS) {
+      missedDaqHealthPolls++
+      if (missedDaqHealthPolls >= MAX_MISSED_CONNECTION_POLLS) {
         await markDaqConnectionLost()
       }
     } finally {
-      isConnectionPollInFlight = false
+      isDaqHealthPollInFlight = false
     }
   }
 
   function startConnectionPolling() {
-    if (!isConnectionPollableState() || !normalizeTarget(target.value)) {
+    if (!isDaqHealthPollableState() || !normalizeTarget(target.value)) {
       return
     }
 
-    if (connectionPollTimer !== null) {
+    if (daqHealthPollTimer !== null) {
       return
     }
 
-    resetConnectionPollMisses()
-    connectionPollTimer = window.setInterval(() => {
-      void pollDaqConnection()
+    resetDaqHealthPollMisses()
+    daqHealthPollTimer = window.setInterval(() => {
+      void pollDaqHealth()
     }, CONNECTION_POLL_INTERVAL_MS)
   }
 
   function stopConnectionPolling() {
-    if (connectionPollTimer === null) {
+    if (daqHealthPollTimer === null) {
       return
     }
 
-    window.clearInterval(connectionPollTimer)
-    connectionPollTimer = null
-    resetConnectionPollMisses()
-    isConnectionPollInFlight = false
+    window.clearInterval(daqHealthPollTimer)
+    daqHealthPollTimer = null
+    resetDaqHealthPollMisses()
+    isDaqHealthPollInFlight = false
   }
 
   async function fetchLoggerHealth(nextTarget: DaqTarget) {
