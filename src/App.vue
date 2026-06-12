@@ -14,10 +14,14 @@ onMounted(async () => {
   void liveDataStore.connect()
   await dataSourceStore.fetchConfig()
   await daqConnectionStore.fetchVisualizerLiveSource()
+  if (daqConnectionStore.isConnected || daqConnectionStore.isReady) {
+    daqConnectionStore.startConnectionPolling()
+  }
 })
 
 onUnmounted(() => {
   liveDataStore.disconnect()
+  daqConnectionStore.stopConnectionPolling()
 })
 </script>
 
