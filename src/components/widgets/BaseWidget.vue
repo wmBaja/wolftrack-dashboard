@@ -3,10 +3,14 @@
 import { ref, computed, h} from 'vue'
 import { useWidgetStore } from '@/stores/widgetStore'
 import { useDbcStore } from '@/stores/dbcStore'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
+import { useLiveDataStore } from '@/stores/liveDataStore'
+import { useLogDataStore } from '@/stores/logDataStore'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import type { MenuOptions } from '@imengyu/vue3-context-menu'
 import type { WIDGET_TYPES } from '@/types/widgets'
 import SignalTree from '@/components/SignalTree.vue'
+import { watch } from 'vue'
 
 interface Props {
   widgetId: string
@@ -50,12 +54,27 @@ function addSignalId(sigId: string) {
   }
 }
 
+const dataSourceStore = useDataSourceStore()
+const liveDataStore = useLiveDataStore()
+const logDataStore = useLogDataStore()
+
+const queryLogData = () => {
+    if (dataSourceStore.config.source !== 'logfile' || logDataStore.status.status !== 'ready') return
+    const signals = widget.value?.signals || []
+    if (signals.length > 0) {
+        logDataStore.queryData(signals, logDataStore.status.start_ts, logDataStore.status.end_ts, 1000)
+    }
+}
+
+watch(() => [logDataStore.status.status, widget.value?.signals, dataSourceStore.config.source], () => {
+    queryLogData()
+})
+
 async function handleRefresh() {
-  isLoading.value = true
-  try {
-    await new Promise(resolve => setTimeout(resolve, 500))
-  } finally {
-    isLoading.value = false
+  if (dataSourceStore.config.source === 'zmq') {
+      liveDataStore.clearBuffers()
+  } else {
+      queryLogData()
   }
 }
 

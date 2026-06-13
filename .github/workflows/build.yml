@@ -25,8 +25,16 @@ jobs:
       # 2. Download the backend (Visualizer)
       - name: Determine Backend Tag
         id: backend-tag
-        run: echo "tag=${{ github.ref_name == 'main' && 'latest' || 'nightly' }}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            LATEST_TAG=$(gh release view --repo wmBaja/wolftrack-visualizer --json tagName --jq .tagName)
+            echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          else
+            echo "tag=nightly" >> $GITHUB_OUTPUT
+          fi
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Download Backend Binary
         shell: bash
@@ -40,9 +48,17 @@ jobs:
           fi
 
           if [ "${{ runner.os }}" == "Windows" ]; then
-            gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer.exe" --dir dashboard/backend
+            gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer-windows.exe" --dir dashboard/backend
+            mv dashboard/backend/wolftrack-visualizer-windows.exe dashboard/backend/wolftrack-visualizer.exe
+            
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer-macos" --dir dashboard/backend
+            mv dashboard/backend/wolftrack-visualizer-macos dashboard/backend/wolftrack-visualizer
+            chmod +x dashboard/backend/wolftrack-visualizer
+            
           else
-            gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer" --dir dashboard/backend
+            gh release download "$TAG" --repo wmBaja/wolftrack-visualizer --pattern "wolftrack-visualizer-linux" --dir dashboard/backend
+            mv dashboard/backend/wolftrack-visualizer-linux dashboard/backend/wolftrack-visualizer
             chmod +x dashboard/backend/wolftrack-visualizer
           fi
         env:

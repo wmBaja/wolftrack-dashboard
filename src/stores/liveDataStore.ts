@@ -1,46 +1,107 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useDataSourceStore } from './dataSourceStore'
 import { useDaqConnectionStore } from './daqConnectionStore'
+import { useWidgetStore } from './widgetStore'
 import { getVisualizerWsUrl } from '@/lib/visualizer'
 
-export interface SignalData {
-  id: string
-  name: string
-  value: number | string
-  timestamp: number
-  arbitration_id: number
-}
+export class RingBuffer {
+  timestamps: Float64Array
+  values: Float64Array
+  head: number
+  length: number
+  capacity: number
+  tail: number
 
-export interface SignalBuffer {
-  timestamps: number[]
-  values: number[]
-}
-
-export function trimSignalBuffer(buffer: SignalBuffer, cutoffTimestamp: number) {
-  let trimIndex = 0
-
-  while (trimIndex < buffer.timestamps.length && buffer.timestamps[trimIndex]! < cutoffTimestamp) {
-    trimIndex++
+  constructor(capacity: number) {
+    this.capacity = capacity
+    this.timestamps = new Float64Array(capacity)
+    this.values = new Float64Array(capacity)
+    this.head = 0
+    this.tail = 0
+    this.length = 0
   }
 
-  if (trimIndex === 0) return
+  push(timestamp: number, value: number) {
+    this.timestamps[this.head] = timestamp
+    this.values[this.head] = value
+    this.head = (this.head + 1) % this.capacity
+    if (this.length < this.capacity) {
+      this.length++
+    } else {
+      this.tail = (this.tail + 1) % this.capacity
+    }
+  }
 
-  buffer.timestamps.splice(0, trimIndex)
-  buffer.values.splice(0, trimIndex)
+  trim(cutoffTimestamp: number) {
+    while (this.length > 0 && this.timestamps[this.tail] !== undefined && this.timestamps[this.tail]! < cutoffTimestamp) {
+      this.tail = (this.tail + 1) % this.capacity
+      this.length--
+    }
+  }
+
+  getArrays() {
+    const ts = new Float64Array(this.length)
+    const vs = new Float64Array(this.length)
+    if (this.length === 0) return { timestamps: ts, values: vs }
+
+    if (this.head > this.tail) {
+      ts.set(this.timestamps.subarray(this.tail, this.head))
+      vs.set(this.values.subarray(this.tail, this.head))
+    } else {
+      const firstPartLen = this.capacity - this.tail
+      ts.set(this.timestamps.subarray(this.tail, this.capacity), 0)
+      vs.set(this.values.subarray(this.tail, this.capacity), 0)
+      ts.set(this.timestamps.subarray(0, this.head), firstPartLen)
+      vs.set(this.values.subarray(0, this.head), firstPartLen)
+    }
+    return { timestamps: ts, values: vs }
+  }
 }
 
 export const useLiveDataStore = defineStore('liveData', () => {
   const isConnected = ref(false)
   const isConnecting = ref(false)
-  const dataVersion = ref(0)
   const sessionStartTimestamp = ref<number | null>(null)
-  
-  // A mapping from signal name to its array of timestamps and values
-  // Storing them as separate arrays is more memory efficient for uPlot and general fast iteration
-  const buffers = ref<Record<string, SignalBuffer>>({})
-  
+
+  // Non-reactive buffers for extreme performance
+  const buffers = new Map<string, RingBuffer>()
+
+  // Expose a dataVersion tick for charts that still want reactivity
+  const dataVersion = ref(0)
+
   let ws: WebSocket | null = null
+
+  function getActiveSignals() {
+    const widgetStore = useWidgetStore()
+    const activeSignals = new Set<string>()
+    widgetStore.widgets.forEach(w => {
+      w.signals?.forEach(s => activeSignals.add(s))
+    })
+    return Array.from(activeSignals)
+  }
+
+  function sendSubscription() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    const dataSource = useDataSourceStore()
+    const signals = getActiveSignals()
+    ws.send(JSON.stringify({
+      type: 'subscribe',
+      signals: signals,
+      live_window_seconds: dataSource.config.live_buffer_window_seconds || 15.0
+    }))
+  }
+
+  // Auto-update subscription when widgets change
+  watch(
+    () => {
+      const widgetStore = useWidgetStore()
+      return widgetStore.widgets.map(w => w.signals?.join(',')).join('|')
+    },
+    () => {
+      sendSubscription()
+    }
+  )
 
   async function connect() {
     if (ws || isConnecting.value) return
@@ -53,13 +114,14 @@ export const useLiveDataStore = defineStore('liveData', () => {
       isConnected.value = true
       isConnecting.value = false
       console.log('Connected to Live Data Stream')
+      sendSubscription()
     }
 
     ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data)
-        
-        if (!Array.isArray(payload)) {
+
+        if (payload.type === 'live_source' || payload.type === 'status') {
           const dataSource = useDataSourceStore()
           const daqConnection = useDaqConnectionStore()
           dataSource.handleVisualizerMessage(payload)
@@ -67,34 +129,36 @@ export const useLiveDataStore = defineStore('liveData', () => {
           return
         }
 
-        const dataSource = useDataSourceStore()
-        let latestTimestamp: number | null = null
+        if (payload.type === 'live_batch' && payload.signals) {
+          const dataSource = useDataSourceStore()
+          let latestTimestamp: number | null = null
 
-        for (const data of payload) {
-          if (typeof data.value !== 'number') continue // Plottable data must be numbers
-
-          if (!buffers.value[data.id]) {
-            // First time seeing this signal, initialize empty arrays
-            buffers.value[data.id] = { timestamps: [], values: [] }
-          }
-
-          const buffer = buffers.value[data.id]
-          if (buffer) {
-            if (sessionStartTimestamp.value == null) {
-              sessionStartTimestamp.value = data.timestamp
+          for (const [signalId, data] of Object.entries(payload.signals)) {
+            const typedData = data as { timestamps: number[], values: number[] }
+            if (!buffers.has(signalId)) {
+              // 10000 capacity per signal gives plenty of room for 100Hz for 15s (1500 pts)
+              buffers.set(signalId, new RingBuffer(10000))
             }
-            buffer.timestamps.push(data.timestamp)
-            buffer.values.push(data.value as number)
-            latestTimestamp = latestTimestamp == null ? data.timestamp : Math.max(latestTimestamp, data.timestamp)
+
+            const buffer = buffers.get(signalId)!
+            for (let i = 0; i < typedData.timestamps.length; i++) {
+              const ts = typedData.timestamps[i]
+              const val = typedData.values[i]
+              if (ts === undefined || val === undefined) continue
+              if (sessionStartTimestamp.value == null) {
+                sessionStartTimestamp.value = ts
+              }
+              buffer.push(ts, val)
+              latestTimestamp = latestTimestamp == null ? ts : Math.max(latestTimestamp, ts)
+            }
           }
-        }
 
-        if (dataSource.config.source === 'zmq' && latestTimestamp != null) {
-          const cutoffTimestamp = latestTimestamp - dataSource.config.live_buffer_window_seconds
-          Object.values(buffers.value).forEach(buffer => trimSignalBuffer(buffer, cutoffTimestamp))
-        }
-
-        if (payload.length > 0) {
+          if (dataSource.config.source === 'zmq' && latestTimestamp != null) {
+            const cutoffTimestamp = latestTimestamp - dataSource.config.live_buffer_window_seconds
+            for (const buffer of buffers.values()) {
+              buffer.trim(cutoffTimestamp)
+            }
+          }
           dataVersion.value++
         }
       } catch (err) {
@@ -124,9 +188,9 @@ export const useLiveDataStore = defineStore('liveData', () => {
   }
 
   function clearBuffers() {
-    buffers.value = {}
-    dataVersion.value++
+    buffers.clear()
     sessionStartTimestamp.value = null
+    dataVersion.value++
   }
 
   return {
@@ -136,6 +200,7 @@ export const useLiveDataStore = defineStore('liveData', () => {
     sessionStartTimestamp,
     connect,
     disconnect,
-    clearBuffers
+    clearBuffers,
+    sendSubscription
   }
 })
