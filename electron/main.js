@@ -18,7 +18,10 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
-    }
+    },
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, 'dist', 'icon.png')
+      : path.join(__dirname, '../public/icon.png')
   });
 
   // In development, load from dev server

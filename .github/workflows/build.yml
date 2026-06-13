@@ -25,8 +25,16 @@ jobs:
       # 2. Download the backend (Visualizer)
       - name: Determine Backend Tag
         id: backend-tag
-        run: echo "tag=${{ github.ref_name == 'main' && 'latest' || 'nightly' }}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            LATEST_TAG=$(gh release view --repo wmBaja/wolftrack-visualizer --json tagName --jq .tagName)
+            echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          else
+            echo "tag=nightly" >> $GITHUB_OUTPUT
+          fi
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Download Backend Binary
         shell: bash
