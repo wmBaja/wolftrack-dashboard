@@ -265,33 +265,6 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     return healthPayload
   }
 
-  function startHealthPolling() {
-    if (healthPollInterval) return
-    healthPollInterval = window.setInterval(async () => {
-      const nextTarget = normalizeTarget(target.value)
-      // Only poll if we have a valid target and are in a state that implies connection
-      if (
-        nextTarget &&
-        (connectionState.value === 'ready' || connectionState.value === 'connected') &&
-        loggingStatus.value !== 'starting' &&
-        loggingStatus.value !== 'stopping'
-      ) {
-        try {
-          await fetchLoggerHealth(nextTarget)
-        } catch (e) {
-          console.error('DAQ health check failed:', e)
-        }
-      }
-    }, 2000)
-  }
-
-  function stopHealthPolling() {
-    if (healthPollInterval) {
-      window.clearInterval(healthPollInterval)
-      healthPollInterval = null
-    }
-  }
-
   function applyLiveSourceState(liveSource: Partial<LiveSourceConfig>) {
     const liveTarget = normalizeTarget({
       host: liveSource.flask_host ?? '',
@@ -305,13 +278,14 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     if (liveSource.connected) {
       connectionState.value = 'connected'
       error.value = null
+      startConnectionPolling()
       return
     }
 
     if (hasRememberedLiveSource(liveSource)) {
       connectionState.value = 'ready'
       error.value = null
-      startHealthPolling()
+      startConnectionPolling()
       return
     }
 
@@ -320,7 +294,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     health.value = null
     loggingActive.value = false
     loggingStatus.value = 'idle'
-    stopHealthPolling()
+    stopConnectionPolling()
   }
 
   function loadPersistedTargets() {
@@ -666,7 +640,6 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       loggingStatus.value = 'idle'
       connectionState.value = 'disconnected'
       error.value = null
-      stopHealthPolling()
     } catch (disconnectError) {
       connectionState.value = 'error'
       error.value = disconnectError instanceof Error ? disconnectError.message : String(disconnectError)
@@ -689,7 +662,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
 
   // Start polling immediately if we loaded a ready/connected state
   if (connectionState.value === 'ready' || connectionState.value === 'connected') {
-    startHealthPolling()
+    startConnectionPolling()
   }
 
   return {
