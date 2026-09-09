@@ -94,7 +94,6 @@ async function applyLogfileConfig() {
 
   if (dataSource.status !== 'error') {
     await dbcStore.fetchSignals()
-    isOpen.value = false
   }
 }
 
@@ -122,23 +121,19 @@ async function connectToDaq() {
   const connected = await daqConnection.connect({ autostart: isResumingReadyStream })
   if (connected) {
     await dbcStore.fetchSignals()
-    isOpen.value = false
   }
 }
 
 async function stopDaqStreaming() {
   await daqConnection.stopStreaming()
-  isOpen.value = false
 }
 
 async function disconnectDaq() {
   await daqConnection.disconnect()
-  isOpen.value = false
 }
 
 async function stopDataSource() {
   await dataSource.stop()
-  isOpen.value = false
 }
 
 async function discoverDaqs() {
@@ -158,6 +153,10 @@ const canStartReadyStream = computed(() => {
 
 const canDisconnectDaq = computed(() => {
   return daqConnection.connectionState === 'connected' || daqConnection.connectionState === 'ready'
+})
+
+const isLiveBufferWindowLocked = computed(() => {
+  return sourceMode.value === 'zmq' && daqConnection.isConnected
 })
 
 const daqPrimaryActionLabel = computed(() => {
@@ -352,6 +351,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
               step="0.5"
               v-model.number="liveBufferWindowSeconds"
               class="speed-slider"
+              :disabled="isLiveBufferWindowLocked"
             />
             <input
               id="live-buffer-window-number-input"
@@ -360,6 +360,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
               step="0.5"
               v-model.number="liveBufferWindowSeconds"
               class="speed-input"
+              :disabled="isLiveBufferWindowLocked"
               aria-label="Live buffer window seconds"
             />
           </div>
@@ -522,14 +523,26 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 </template>
 
 <style scoped>
+:global(:root) {
+  --data-source-space-sm: 8px;
+  --data-source-radius-sm: 8px;
+  --data-source-control-padding: 8px 11px;
+  --data-source-control-font-size: 12px;
+  --data-source-control-bg: rgba(0, 0, 0, 0.25);
+  --data-source-subtle-surface: rgba(255, 255, 255, 0.04);
+  --data-source-panel-border: rgba(255, 255, 255, 0.08);
+  --data-source-panel-shadow: 0 24px 56px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --data-source-footer-border: rgba(255, 255, 255, 0.06);
+}
+
 .datasource-trigger {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
   padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-hover);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--data-source-radius-sm);
   color: var(--color-text);
   font-size: 13px;
   font-weight: 500;
@@ -543,8 +556,8 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--data-source-space-sm);
+  height: var(--data-source-space-sm);
   border-radius: 50%;
   transition: background 0.3s;
 }
@@ -571,15 +584,15 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 
 .config-panel {
   position: fixed;
-  top: calc(var(--navbar-height) + 8px);
+  top: calc(var(--navbar-height) + var(--data-source-space-sm));
   right: 16px;
   width: min(420px, calc(100vw - 24px));
   max-height: calc(100vh - var(--navbar-height) - 24px);
   overflow-y: auto;
   background: var(--color-panel);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--data-source-panel-border);
   border-radius: 14px;
-  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  box-shadow: var(--data-source-panel-shadow);
   z-index: 50;
   padding: 20px;
   display: flex;
@@ -626,12 +639,12 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .error-banner {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
   padding: 10px 12px;
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--data-source-radius-sm);
+  font-size: var(--data-source-control-font-size);
   color: var(--color-danger-text);
   line-height: 1.5;
 }
@@ -648,7 +661,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .field-label {
-  font-size: 12px;
+  font-size: var(--data-source-control-font-size);
   font-weight: 600;
   color: var(--color-muted);
   text-transform: uppercase;
@@ -656,7 +669,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .required {
-  color: #ef4444;
+  color: var(--color-danger);
   margin-left: 2px;
 }
 
@@ -675,7 +688,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 
 .toggle-group {
   display: flex;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
 }
 
 .toggle-btn {
@@ -685,9 +698,9 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   justify-content: center;
   gap: 6px;
   padding: 9px 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--data-source-subtle-surface);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--data-source-radius-sm);
   color: var(--color-muted);
   font-size: 13px;
   font-weight: 500;
@@ -711,18 +724,18 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .speed-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
 }
 
 .text-input,
 .port-input,
 .speed-input {
   min-width: 0;
-  padding: 8px 11px;
-  background: rgba(0, 0, 0, 0.25);
+  padding: var(--data-source-control-padding);
+  background: var(--data-source-control-bg);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--data-source-radius-sm);
+  font-size: var(--data-source-control-font-size);
   color: var(--color-text);
   transition: border-color 0.15s;
 }
@@ -776,7 +789,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   border: 1px solid var(--color-blue-border);
   border-radius: 7px;
   color: var(--color-blue-text);
-  font-size: 12px;
+  font-size: var(--data-source-control-font-size);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -800,7 +813,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   border: 1px solid var(--color-danger-border);
   border-radius: 7px;
   color: var(--color-danger-text);
-  font-size: 12px;
+  font-size: var(--data-source-control-font-size);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -812,16 +825,16 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .chip-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
 }
 
 .chip-btn {
   padding: 7px 10px;
   border-radius: 999px;
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--data-source-subtle-surface);
   color: var(--color-text);
-  font-size: 12px;
+  font-size: var(--data-source-control-font-size);
   cursor: pointer;
 }
 
@@ -834,7 +847,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .health-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--data-source-space-sm);
 }
 
 .health-card {
@@ -866,24 +879,30 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   text-align: center;
 }
 
+.speed-slider:disabled,
+.speed-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .panel-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--data-source-footer-border);
 }
 
 .footer-right {
   display: flex;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
   margin-left: auto;
 }
 
 .action-btn {
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: var(--data-source-radius-sm);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;

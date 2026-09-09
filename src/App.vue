@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import NavBar from './components/NavBar.vue'
+import DaqReconnectDialog from './components/DaqReconnectDialog.vue'
 import { useLiveDataStore } from './stores/liveDataStore'
 import { useDataSourceStore } from './stores/dataSourceStore'
 import { useDaqConnectionStore } from './stores/daqConnectionStore'
@@ -14,10 +15,15 @@ onMounted(async () => {
   void liveDataStore.connect()
   await dataSourceStore.fetchConfig()
   await daqConnectionStore.fetchVisualizerLiveSource()
+  if (daqConnectionStore.isConnected || daqConnectionStore.isReady) {
+    daqConnectionStore.startConnectionPolling()
+  }
 })
 
 onUnmounted(() => {
   liveDataStore.disconnect()
+  daqConnectionStore.stopConnectionPolling()
+  daqConnectionStore.cancelReconnect()
 })
 </script>
 
@@ -28,5 +34,15 @@ onUnmounted(() => {
     <main class="flex-1">
       <RouterView />
     </main>
+
+    <DaqReconnectDialog
+      v-if="daqConnectionStore.reconnectRecoveryActive"
+      :target="daqConnectionStore.target"
+      :error="daqConnectionStore.error"
+      :next-attempt-at="daqConnectionStore.reconnectNextAttemptAt"
+      :reconnecting="daqConnectionStore.reconnectInProgress"
+      @force-reconnect="daqConnectionStore.forceReconnect"
+      @cancel="daqConnectionStore.cancelReconnect"
+    />
   </div>
 </template>
