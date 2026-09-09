@@ -58,6 +58,7 @@ const REQUEST_TIMEOUT_MS = 4000
 const MAX_RECENT_TARGETS = 5
 export const CONNECTION_POLL_INTERVAL_MS = 5000
 export const MAX_MISSED_CONNECTION_POLLS = 2
+export const AUTO_RECONNECT_INTERVAL_MS = 10000
 const LOST_CONNECTION_MESSAGE = 'Lost connection to the DAQ. Check the network connection and reconnect.'
 
 function hasRememberedLiveSource(liveSource: Partial<LiveSourceConfig>) {
@@ -119,9 +120,14 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
   const health = ref<LoggerHealthResponse | null>(null)
   const loggingActive = ref(false)
   const loggingStatus = ref<DaqLoggingStatus>('idle')
+  const reconnectRecoveryActive = ref(false)
+  const reconnectInProgress = ref(false)
+  const reconnectNextAttemptAt = ref<number | null>(null)
   let daqHealthPollTimer: number | null = null
+  let reconnectTimer: number | null = null
   let missedDaqHealthPolls = 0
   let isDaqHealthPollInFlight = false
+  let isIntentionalLiveSourceChange = false
 
   const isConnected = computed(() => connectionState.value === 'connected')
   const isReady = computed(() => connectionState.value === 'ready')
@@ -171,6 +177,56 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     error.value = nextError
   }
 
+  function clearReconnectTimer() {
+    if (reconnectTimer !== null) {
+      window.clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    reconnectNextAttemptAt.value = null
+  }
+
+  function finishReconnectRecovery() {
+    clearReconnectTimer()
+    reconnectRecoveryActive.value = false
+    reconnectInProgress.value = false
+  }
+
+  function scheduleReconnectAttempt() {
+    if (!reconnectRecoveryActive.value || reconnectInProgress.value || reconnectTimer !== null) {
+      return
+    }
+
+    reconnectNextAttemptAt.value = Date.now() + AUTO_RECONNECT_INTERVAL_MS
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null
+      reconnectNextAttemptAt.value = null
+      void forceReconnect()
+    }, AUTO_RECONNECT_INTERVAL_MS)
+  }
+
+  async function forceReconnect() {
+    if (!reconnectRecoveryActive.value || reconnectInProgress.value) {
+      return false
+    }
+
+    clearReconnectTimer()
+    reconnectInProgress.value = true
+    const connected = await connect({ autostart: true })
+    reconnectInProgress.value = false
+
+    if (connected) {
+      finishReconnectRecovery()
+      return true
+    }
+
+    scheduleReconnectAttempt()
+    return false
+  }
+
+  function cancelReconnect() {
+    finishReconnectRecovery()
+  }
+
   async function disconnectVisualizerLiveSourceBestEffort() {
     try {
       const visualizerBase = await getVisualizerBase()
@@ -185,6 +241,8 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
   async function markDaqConnectionLost() {
     stopConnectionPolling()
     clearDaqConnectionState(LOST_CONNECTION_MESSAGE)
+    reconnectRecoveryActive.value = true
+    scheduleReconnectAttempt()
     await disconnectVisualizerLiveSourceBestEffort()
   }
 
@@ -266,6 +324,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
   }
 
   function applyLiveSourceState(liveSource: Partial<LiveSourceConfig>) {
+    const wasConnected = connectionState.value === 'connected'
     const liveTarget = normalizeTarget({
       host: liveSource.flask_host ?? '',
       port: liveSource.flask_port ?? DEFAULT_PORT,
@@ -279,6 +338,11 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       connectionState.value = 'connected'
       error.value = null
       startConnectionPolling()
+      return
+    }
+
+    if (wasConnected && !isIntentionalLiveSourceChange) {
+      void markDaqConnectionLost()
       return
     }
 
@@ -465,6 +529,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
       if (!autostart) {
         await stopStreaming()
       }
+      finishReconnectRecovery()
       return true
     } catch (connectError) {
       if (connectError instanceof DOMException && connectError.name === 'AbortError') {
@@ -478,6 +543,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
   }
 
   async function stopStreaming() {
+    isIntentionalLiveSourceChange = true
     try {
       const visualizerBase = await getVisualizerBase()
       const response = await fetch(`${visualizerBase}/api/live_source/stop`, {
@@ -501,6 +567,8 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     } catch (stopError) {
       connectionState.value = 'error'
       error.value = stopError instanceof Error ? stopError.message : String(stopError)
+    } finally {
+      isIntentionalLiveSourceChange = false
     }
   }
 
@@ -614,6 +682,8 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
 
   async function disconnect() {
     stopConnectionPolling()
+    finishReconnectRecovery()
+    isIntentionalLiveSourceChange = true
     try {
       const visualizerBase = await getVisualizerBase()
       const response = await fetch(`${visualizerBase}/api/live_source/disconnect`, {
@@ -643,6 +713,8 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     } catch (disconnectError) {
       connectionState.value = 'error'
       error.value = disconnectError instanceof Error ? disconnectError.message : String(disconnectError)
+    } finally {
+      isIntentionalLiveSourceChange = false
     }
   }
 
@@ -675,6 +747,9 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     health,
     loggingActive,
     loggingStatus,
+    reconnectRecoveryActive,
+    reconnectInProgress,
+    reconnectNextAttemptAt,
     hasHealthyDaq,
     canToggleLogging,
     isConnected,
@@ -691,6 +766,8 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     stopLogging,
     toggleLogging,
     disconnect,
+    forceReconnect,
+    cancelReconnect,
     handleVisualizerMessage,
   }
 })
