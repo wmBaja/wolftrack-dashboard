@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import { spawn } from 'child_process'
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { fileURLToPath } from 'url'
+import { waitForBackendReady } from './backendReadiness.js'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,7 +106,25 @@ ipcMain.handle('discover-daq-services', async () => {
 
 let backendProcess = null;
 let backendPortResolver = null;
-const backendPortPromise = new Promise(resolve => { backendPortResolver = resolve; });
+let backendPortRejecter = null;
+let backendReadinessStarted = false;
+let backendReadinessSettled = false;
+const backendPortPromise = new Promise((resolve, reject) => {
+  backendPortResolver = resolve;
+  backendPortRejecter = reject;
+});
+
+function resolveBackendPort(port) {
+  if (backendReadinessSettled) return
+  backendReadinessSettled = true
+  backendPortResolver(port)
+}
+
+function rejectBackendPort(error) {
+  if (backendReadinessSettled) return
+  backendReadinessSettled = true
+  backendPortRejecter(error)
+}
 
 ipcMain.handle('get-backend-port', async () => {
   return await backendPortPromise;
@@ -146,12 +165,15 @@ function startBackend() {
     console.log(`Backend: ${output}`);
 
     // Parse the port if needed by your renderer
-    if (output.includes('WOLFTRACK_WS_PORT=')) {
+    if (!backendReadinessStarted && output.includes('WOLFTRACK_WS_PORT=')) {
       const match = output.match(/WOLFTRACK_WS_PORT=(\d+)/);
       if (match && match[1]) {
         const port = match[1];
+        backendReadinessStarted = true
         process.env.WOLFTRACK_WS_PORT = port;
-        if (backendPortResolver) backendPortResolver(port);
+        void waitForBackendReady({ port })
+          .then(() => resolveBackendPort(port))
+          .catch((error) => rejectBackendPort(error))
       }
     }
   });
@@ -159,6 +181,18 @@ function startBackend() {
   backendProcess.stderr.on('data', (data) => {
     console.error(`Backend Error: ${data.toString()}`);
   });
+
+  backendProcess.on('error', (error) => {
+    rejectBackendPort(error)
+  })
+
+  backendProcess.on('exit', (code, signal) => {
+    if (!backendReadinessSettled) {
+      rejectBackendPort(new Error(
+        `Visualizer backend exited before becoming ready (code=${code}, signal=${signal}).`
+      ))
+    }
+  })
 }
 
 app.whenReady().then(() => {

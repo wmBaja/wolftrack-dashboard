@@ -71,36 +71,12 @@ function formatDate(timestamp: number) {
   })
 }
 
-function parseLogDateFromFilename(filename: string) {
-  const match = filename.match(/(\d{4})(\d{2})(\d{2})[_-](\d{2})(\d{2})(\d{2})/)
-  if (!match) {
-    return null
-  }
-
-  const [, year, month, day, hours, minutes, seconds] = match
-  const parsed = new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hours),
-    Number(minutes),
-    Number(seconds),
-  )
-
-  return Number.isNaN(parsed.getTime()) ? null : parsed
-}
-
 function formatLogDate(log: { name: string; mtime?: number }) {
   if (typeof log.mtime === 'number') {
     return formatDate(log.mtime)
   }
 
-  const parsed = parseLogDateFromFilename(log.name)
-  if (!parsed) {
-    return null
-  }
-
-  return formatDate(parsed.getTime())
+  return null
 }
 
 function getLogTimestamp(log: { name: string; mtime?: number }) {
@@ -108,8 +84,7 @@ function getLogTimestamp(log: { name: string; mtime?: number }) {
     return log.mtime > 1_000_000_000_000 ? log.mtime : log.mtime * 1000
   }
 
-  const parsed = parseLogDateFromFilename(log.name)
-  return parsed ? parsed.getTime() : Number.NEGATIVE_INFINITY
+  return Number.NEGATIVE_INFINITY
 }
 
 function getActiveLogName() {

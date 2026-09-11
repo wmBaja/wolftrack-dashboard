@@ -572,7 +572,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     }
   }
 
-  async function startLogging() {
+  async function startLogging(filenameTemplate?: string) {
     const nextTarget = normalizeTarget(target.value)
     if (!nextTarget) {
       error.value = 'Enter a valid DAQ host and port.'
@@ -588,6 +588,7 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     error.value = null
     loggingActive.value = true
     loggingStatus.value = 'starting'
+    const normalizedFilenameTemplate = filenameTemplate?.trim()
 
     try {
       const response = await withTimeout(`http://${nextTarget.host}:${nextTarget.port}/api/session/start`, {
@@ -595,7 +596,11 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify(
+          normalizedFilenameTemplate
+            ? { filename_template: normalizedFilenameTemplate }
+            : {},
+        ),
       })
       const payload = await parseJsonResponse<LoggerSessionResponse>(
         response,
@@ -664,13 +669,13 @@ export const useDaqConnectionStore = defineStore('daqConnection', () => {
     }
   }
 
-  async function toggleLogging() {
+  async function toggleLogging(filenameTemplate?: string) {
     if (!canToggleLogging.value) {
       return false
     }
 
     try {
-      return loggingActive.value ? await stopLogging() : await startLogging()
+      return loggingActive.value ? await stopLogging() : await startLogging(filenameTemplate)
     } finally {
       try {
         await useLogStore().fetchLogs()

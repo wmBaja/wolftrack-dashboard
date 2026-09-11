@@ -35,7 +35,7 @@ function getDaqLogApiBase() {
 }
 
 function normalizeRemoteLog(
-  entry: { name?: string; download_url?: string; url?: string; size?: number; mtime?: number; active?: boolean; current?: boolean },
+  entry: { name?: string; download_url?: string; url?: string; size?: number; mtime?: number; modified?: number; active?: boolean; current?: boolean },
   apiBase: string,
 ): RemoteLogFileInfo | null {
   const name = entry.name?.trim()
@@ -55,8 +55,9 @@ function normalizeRemoteLog(
     normalized.size = entry.size
   }
 
-  if (typeof entry.mtime === 'number') {
-    normalized.mtime = entry.mtime
+  const modifiedTimestamp = entry.mtime ?? entry.modified
+  if (typeof modifiedTimestamp === 'number') {
+    normalized.mtime = modifiedTimestamp
   }
 
   if (typeof entry.active === 'boolean') {
@@ -86,8 +87,8 @@ export const useLogStore = defineStore('logStore', () => {
       }
 
       const payload = await response.json() as
-        | Array<{ name?: string; download_url?: string; url?: string; size?: number; mtime?: number; active?: boolean; current?: boolean }>
-        | { files?: Array<{ name?: string; download_url?: string; url?: string; size?: number; mtime?: number; active?: boolean; current?: boolean }> }
+        | Array<{ name?: string; download_url?: string; url?: string; size?: number; mtime?: number; modified?: number; active?: boolean; current?: boolean }>
+        | { files?: Array<{ name?: string; download_url?: string; url?: string; size?: number; mtime?: number; modified?: number; active?: boolean; current?: boolean }> }
 
       const files = Array.isArray(payload) ? payload : payload.files ?? []
       availableLogs.value = files
