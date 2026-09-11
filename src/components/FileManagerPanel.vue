@@ -61,8 +61,13 @@ function formatSize(bytes: number) {
 function formatDate(timestamp: number) {
   const date = timestamp > 1_000_000_000_000 ? new Date(timestamp) : new Date(timestamp * 1000)
 
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric', month: 'short', day: 'numeric'
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
   })
 }
 
@@ -95,9 +100,7 @@ function formatLogDate(log: { name: string; mtime?: number }) {
     return null
   }
 
-  return parsed.toLocaleDateString(undefined, {
-    year: 'numeric', month: 'short', day: 'numeric'
-  })
+  return formatDate(parsed.getTime())
 }
 
 function getLogTimestamp(log: { name: string; mtime?: number }) {

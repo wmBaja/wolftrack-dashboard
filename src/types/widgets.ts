@@ -23,7 +23,7 @@ export interface Widget extends LayoutItem {
 
 const WIDGET_DEFAULTS: Record<WIDGET_TYPES, { w: number; h: number; minW: number; minH: number }> = {
   [WIDGET_TYPES.BASE]: { w: 4, h: 4, minW: 2, minH: 2 },
-  [WIDGET_TYPES.CHART]: { w: 6, h: 6, minW: 4, minH: 4 },
+  [WIDGET_TYPES.CHART]: { w: 5, h: 15, minW: 4, minH: 4 },
 }
 
 // Generate unique ID using timestamp + random string
