@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onBeforeUnmount, onMounted } from 'vue'
 import { useDbcStore } from '@/stores/dbcStore'
 import { useLogStore } from '@/stores/logStore'
 import { useDaqConnectionStore } from '@/stores/daqConnectionStore'
@@ -13,7 +13,17 @@ const isOpen = ref(false)
 const activeTab = ref<'logs' | 'dbc'>('dbc')
 const renameTarget = ref<{ type: 'log' | 'dbc'; name: string } | null>(null)
 const renameValue = ref('')
-const deleteTarget = ref<{ type: 'log' | 'dbc'; name: string } | null>(null)
+const deleteTarget = ref<{ type: 'log' | 'dbc'; names: string[] } | null>(null)
+const selectedLogNames = ref<string[]>([])
+const selectedDbcNames = ref<string[]>([])
+const selectionAnchor = ref<{ type: 'log' | 'dbc'; name: string } | null>(null)
+const isBulkDownloading = ref(false)
+
+const selectedLogCount = computed(() => selectedLogNames.value.length)
+const selectedDbcCount = computed(() => selectedDbcNames.value.length)
+const selectableLogNames = computed(() => logStore.availableLogs
+  .filter((log) => !isActiveLog(log))
+  .map((log) => log.name))
 
 const renameIsValid = computed(() => {
   if (!renameTarget.value) return false
@@ -55,7 +65,7 @@ function selectDbc(filename: string) {
 }
 
 function deleteDbc(filename: string) {
-  deleteTarget.value = { type: 'dbc', name: filename }
+  deleteTarget.value = { type: 'dbc', names: [filename] }
 }
 
 function showLogsTab() {
@@ -67,6 +77,22 @@ function showLogsTab() {
 
 function downloadLog(name: string, url: string) {
   logStore.downloadLog({ name, url })
+}
+
+async function downloadSelectedLogs() {
+  if (isBulkDownloading.value) return
+
+  const selectedLogs = logStore.availableLogs.filter((log) => selectedLogNames.value.includes(log.name))
+  if (selectedLogs.length === 0) return
+
+  isBulkDownloading.value = true
+  try {
+    for (const log of selectedLogs) {
+      await logStore.downloadLog(log)
+    }
+  } finally {
+    isBulkDownloading.value = false
+  }
 }
 
 function startRename(type: 'log' | 'dbc', name: string) {
@@ -98,13 +124,98 @@ async function saveRename() {
 async function confirmDelete() {
   if (!deleteTarget.value) return
 
-  const { type, name } = deleteTarget.value
+  const { type, names } = deleteTarget.value
+  const deletedNames: string[] = []
+  for (const name of names) {
+    const deleted = type === 'log'
+      ? await logStore.deleteLog(name)
+      : await dbcStore.deleteDbc(name)
+    if (deleted) deletedNames.push(name)
+  }
+
   if (type === 'log') {
-    await logStore.deleteLog(name)
+    selectedLogNames.value = selectedLogNames.value.filter((name) => !deletedNames.includes(name))
   } else {
-    await dbcStore.deleteDbc(name)
+    selectedDbcNames.value = selectedDbcNames.value.filter((name) => !deletedNames.includes(name))
   }
   deleteTarget.value = null
+}
+
+function toggleFileSelection(type: 'log' | 'dbc', name: string) {
+  const selected = type === 'log' ? selectedLogNames.value : selectedDbcNames.value
+  const next = selected.includes(name)
+    ? selected.filter((selectedName) => selectedName !== name)
+    : [...selected, name]
+
+  if (type === 'log') selectedLogNames.value = next
+  else selectedDbcNames.value = next
+}
+
+function getSelectableNames(type: 'log' | 'dbc') {
+  return type === 'log'
+    ? selectableLogNames.value
+    : dbcStore.availableDbcs.map((dbc) => dbc.name)
+}
+
+function handleFileClick(type: 'log' | 'dbc', name: string, event: MouseEvent) {
+  if (type === 'log' && isActiveLog({ name })) return
+
+  const names = getSelectableNames(type)
+  const selected = type === 'log' ? selectedLogNames.value : selectedDbcNames.value
+  const anchor = selectionAnchor.value?.type === type ? selectionAnchor.value.name : null
+
+  if (event.shiftKey && anchor && names.includes(anchor)) {
+    const start = Math.min(names.indexOf(anchor), names.indexOf(name))
+    const end = Math.max(names.indexOf(anchor), names.indexOf(name))
+    const next = [...new Set([...selected, ...names.slice(start, end + 1)])]
+    if (type === 'log') selectedLogNames.value = next
+    else selectedDbcNames.value = next
+    return
+  }
+
+  selectionAnchor.value = { type, name }
+  if (event.ctrlKey || event.metaKey) {
+    toggleFileSelection(type, name)
+  } else if (type === 'dbc') {
+    selectDbc(name)
+  }
+}
+
+function isSelected(type: 'log' | 'dbc', name: string) {
+  return (type === 'log' ? selectedLogNames.value : selectedDbcNames.value).includes(name)
+}
+
+function selectAll(type: 'log' | 'dbc') {
+  const availableNames = type === 'log'
+    ? selectableLogNames.value
+    : dbcStore.availableDbcs.map((dbc) => dbc.name)
+
+  if (type === 'log') selectedLogNames.value = availableNames
+  else selectedDbcNames.value = availableNames
+}
+
+function clearSelection(type: 'log' | 'dbc') {
+  if (type === 'log') selectedLogNames.value = []
+  else selectedDbcNames.value = []
+  if (selectionAnchor.value?.type === type) selectionAnchor.value = null
+}
+
+function requestBulkDelete(type: 'log' | 'dbc') {
+  const names = type === 'log'
+    ? selectedLogNames.value.filter((name) => selectableLogNames.value.includes(name))
+    : selectedDbcNames.value
+  if (names.length > 0) deleteTarget.value = { type, names: [...names] }
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !isOpen.value) return
+
+  if (renameTarget.value) {
+    cancelRename()
+    return
+  }
+
+  clearSelection(activeTab.value === 'logs' ? 'log' : 'dbc')
 }
 
 function isRenaming(type: 'log' | 'dbc', name: string) {
@@ -182,8 +293,13 @@ function isActiveLog(log: { name: string; active?: boolean }) {
 }
 
 onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
   dbcStore.fetchDbcs()
   dbcStore.fetchSignals()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
 })
 </script>
 
@@ -216,9 +332,9 @@ onMounted(() => {
       </div>
 
       <!-- Content -->
-      <div class="drawer-content">
+      <div class="drawer-content" @click.self="activeTab === 'logs' ? clearSelection('log') : clearSelection('dbc')">
         <!-- Logs Tab -->
-        <div v-if="activeTab === 'logs'" class="tab-pane">
+        <div v-if="activeTab === 'logs'" class="tab-pane" @click.self="clearSelection('log')">
           <div class="logs-header">
             <div class="logs-source">
               <span class="logs-label">DAQ Log API</span>
@@ -228,8 +344,30 @@ onMounted(() => {
             </div>
             <button class="refresh-btn" @click="logStore.fetchLogs" :disabled="logStore.isLoading">Refresh</button>
           </div>
+          <div class="selection-toolbar">
+            <button type="button" @click="selectAll('log')" :disabled="selectableLogNames.length === 0">Select all</button>
+            <span v-if="selectedLogCount" class="selection-count">{{ selectedLogCount }} selected</span>
+            <button
+              v-if="selectedLogCount"
+              type="button"
+              class="selection-icon-btn"
+              :disabled="isBulkDownloading || logStore.downloadingName !== null"
+              :title="isBulkDownloading ? 'Saving selected logs…' : 'Download selected logs'"
+              :aria-label="isBulkDownloading ? 'Saving selected logs' : 'Download selected logs'"
+              @click="downloadSelectedLogs"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15" aria-hidden="true">
+                <path fill-rule="evenodd" d="M10 2a1 1 0 0 1 1 1v7.586l2.293-2.293a1 1 0 0 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 1.414-1.414L9 10.586V3a1 1 0 0 1 1-1Zm-6 14a1 1 0 0 1 1-1h10a1 1 0 1 1 0 2H5a1 1 0 0 1-1-1Z" clip-rule="evenodd" />
+              </svg>
+            </button>
+            <button v-if="selectedLogCount" type="button" class="bulk-delete-btn selection-icon-btn" title="Delete selected logs" aria-label="Delete selected logs" @click="requestBulkDelete('log')">
+              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
+                <path fill-rule="evenodd" d="M9 2a1 1 0 0 0-.894.553L7.382 4H4a1 1 0 0 0 0 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a1 1 0 1 0 0-2h-3.382l-.724-1.447A1 1 0 0 0 11 2H9zM7 8a1 1 0 0 1 2 0v6a1 1 0 1 1-2 0V8zm5-1a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
           <div v-if="logStore.error" class="error-msg">{{ logStore.error }}</div>
-          <div class="file-list">
+          <div class="file-list" @click.self="clearSelection('log')">
             <div v-if="logStore.isLoading" class="empty-state">
               <p>Loading logs...</p>
             </div>
@@ -240,7 +378,8 @@ onMounted(() => {
               v-for="log in logStore.availableLogs"
               :key="log.name"
               class="file-item"
-              :class="{ 'is-logging': isActiveLog(log) }"
+              :class="{ 'is-logging': isActiveLog(log), 'is-selected': isSelected('log', log.name) }"
+              @click="handleFileClick('log', log.name, $event)"
             >
               <div v-if="!isRenaming('log', log.name)" class="file-info">
                 <span class="status-indicator"></span>
@@ -274,7 +413,7 @@ onMounted(() => {
                 <button
                   :id="`download-log-${log.name.replace(/\./g, '-')}-btn`"
                   class="download-btn"
-                  :disabled="logStore.downloadingName === log.name || logStore.mutatingName !== null"
+                  :disabled="logStore.downloadingName === log.name || logStore.mutatingName !== null || isBulkDownloading"
                   @click.stop="downloadLog(log.name, log.url)"
                   :title="logStore.downloadingName === log.name ? 'Saving…' : 'Download'"
                   :aria-label="logStore.downloadingName === log.name ? `Saving ${log.name}` : `Download ${log.name}`"
@@ -286,7 +425,7 @@ onMounted(() => {
                 <button
                   class="delete-btn"
                   :disabled="isLogActionDisabled(log)"
-                  @click.stop="deleteTarget = { type: 'log', name: log.name }"
+                  @click.stop="deleteTarget = { type: 'log', names: [log.name] }"
                   :title="isActiveLog(log) ? 'Stop logging before deleting this file' : 'Delete'"
                   aria-label="Delete log"
                 >
@@ -300,7 +439,7 @@ onMounted(() => {
         </div>
 
         <!-- DBC Tab -->
-        <div v-if="activeTab === 'dbc'" class="tab-pane">
+        <div v-if="activeTab === 'dbc'" class="tab-pane" @click.self="clearSelection('dbc')">
           <div class="upload-section">
             <label class="upload-btn">
               <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
@@ -310,10 +449,19 @@ onMounted(() => {
               <input type="file" accept=".dbc" @change="handleDbcUpload" hidden />
             </label>
           </div>
+          <div class="selection-toolbar">
+            <button type="button" @click="selectAll('dbc')" :disabled="dbcStore.availableDbcs.length === 0">Select all</button>
+            <span v-if="selectedDbcCount" class="selection-count">{{ selectedDbcCount }} selected</span>
+            <button v-if="selectedDbcCount" type="button" class="bulk-delete-btn selection-icon-btn" title="Delete selected DBCs" aria-label="Delete selected DBCs" @click="requestBulkDelete('dbc')">
+              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
+                <path fill-rule="evenodd" d="M9 2a1 1 0 0 0-.894.553L7.382 4H4a1 1 0 0 0 0 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2 2V6a1 1 0 1 0 0-2h-3.382l-.724-1.447A1 1 0 0 0 11 2H9zM7 8a1 1 0 0 1 2 0v6a1 1 0 1 1-2 0V8zm5-1a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
 
           <div v-if="dbcStore.error" class="error-msg">{{ dbcStore.error }}</div>
 
-          <div class="file-list">
+          <div class="file-list" @click.self="clearSelection('dbc')">
             <div v-if="dbcStore.availableDbcs.length === 0" class="empty-state">
               <p>No DBC files uploaded yet.</p>
             </div>
@@ -321,15 +469,15 @@ onMounted(() => {
               v-for="filename in dbcStore.availableDbcs"
               :key="filename.name"
               class="file-item"
-              :class="{ 'is-active': dbcStore.activeDbc === filename.name }"
+              :class="{ 'is-active': dbcStore.activeDbc === filename.name, 'is-selected': isSelected('dbc', filename.name) }"
+              @click="handleFileClick('dbc', filename.name, $event)"
             >
-              <div v-if="!isRenaming('dbc', filename.name)" class="file-info" @click="selectDbc(filename.name)">
+              <div v-if="!isRenaming('dbc', filename.name)" class="file-info">
                 <span class="status-indicator"></span>
                 <div class="file-details">
                   <span
                     class="filename renameable-filename"
                     title="Double-click to rename"
-                    @click.stop
                     @dblclick.stop="startRename('dbc', filename.name)"
                   >{{ filename.name }}</span>
                   <span class="file-stats">{{ formatSize(filename.size) }} &bull; {{ formatDate(filename.mtime) }}</span>
@@ -368,7 +516,7 @@ onMounted(() => {
   <ConfirmDialog
     :show="deleteTarget !== null"
     title="Delete file?"
-    :message="deleteTarget ? `Delete ${deleteTarget.name}? This cannot be undone.` : ''"
+    :message="deleteTarget ? `Delete ${deleteTarget.names.length === 1 ? deleteTarget.names[0] : `${deleteTarget.names.length} selected files`}? This cannot be undone.` : ''"
     confirm-text="Delete"
     danger
     @confirm="confirmDelete"
@@ -487,6 +635,72 @@ onMounted(() => {
   word-break: break-all;
 }
 
+.selection-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 14px;
+}
+
+.selection-toolbar button {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 3%);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  padding: 6px 10px;
+  transition: border-color .15s ease, background .15s ease, color .15s ease, transform .15s ease;
+}
+
+.selection-toolbar button:hover:not(:disabled) {
+  border-color: var(--color-blue-border);
+  background: var(--color-blue-bg-glow);
+  color: var(--color-blue-text);
+  transform: translateY(-1px);
+}
+
+.selection-toolbar button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.selection-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.selection-toolbar .bulk-delete-btn {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.selection-toolbar .bulk-delete-btn:hover:not(:disabled) {
+  border-color: var(--color-danger);
+  background: rgba(239, 68, 68, .2);
+  color: var(--color-danger-text);
+}
+
+.selection-toolbar .selection-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 6px;
+}
+
+.selection-count {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-muted);
+  font-size: 11px;
+  padding: 5px 9px;
+}
+
 .upload-btn {
   display: flex;
   align-items: center;
@@ -496,14 +710,18 @@ onMounted(() => {
   padding: 10px;
   background: var(--color-accent);
   color: white;
-  border-radius: 8px;
+  border: 1px solid var(--color-blue-border);
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s;
+  box-shadow: 0 6px 18px rgb(59 130 246 / 16%);
+  transition: background .2s, box-shadow .2s, transform .2s;
 }
 .upload-btn:hover {
   background: #2563eb;
+  box-shadow: 0 8px 22px rgb(59 130 246 / 24%);
+  transform: translateY(-1px);
 }
 
 .file-list {
@@ -550,6 +768,13 @@ onMounted(() => {
   flex: 1;
   overflow: hidden;
 }
+
+.file-item.is-selected {
+  background: var(--color-blue-bg-glow);
+  border-color: var(--color-blue-border);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
 
 .filename {
   font-size: 13px;

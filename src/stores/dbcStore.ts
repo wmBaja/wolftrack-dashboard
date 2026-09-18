@@ -83,8 +83,10 @@ export const useDbcStore = defineStore('dbcStore', () => {
       
       await fetchDbcs()
       await fetchSignals()
+      return true
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)
+      return false
     } finally {
       isLoading.value = false
     }
@@ -109,8 +111,10 @@ export const useDbcStore = defineStore('dbcStore', () => {
       
       await fetchDbcs()
       await fetchSignals()
+      return true
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)
+      return false
     } finally {
       isLoading.value = false
     }
@@ -131,8 +135,10 @@ export const useDbcStore = defineStore('dbcStore', () => {
       
       await fetchDbcs()
       await fetchSignals()
+      return true
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)
+      return false
     } finally {
       isLoading.value = false
       mutatingName.value = null
