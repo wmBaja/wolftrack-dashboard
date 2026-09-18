@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useDbcStore } from '@/stores/dbcStore'
 import { useLogStore } from '@/stores/logStore'
 import { useDaqConnectionStore } from '@/stores/daqConnectionStore'
+import ConfirmDialog from './ConfirmDialog.vue'
 
 const dbcStore = useDbcStore()
 const logStore = useLogStore()
@@ -10,6 +11,26 @@ const daqConnection = useDaqConnectionStore()
 
 const isOpen = ref(false)
 const activeTab = ref<'logs' | 'dbc'>('dbc')
+const renameTarget = ref<{ type: 'log' | 'dbc'; name: string } | null>(null)
+const renameValue = ref('')
+const deleteTarget = ref<{ type: 'log' | 'dbc'; name: string } | null>(null)
+
+const renameIsValid = computed(() => {
+  if (!renameTarget.value) return false
+  const { type, name } = renameTarget.value
+  const newName = renameFilename.value
+  const isValid = type === 'log'
+    ? logStore.isValidLogFilename(newName)
+    : dbcStore.isValidDbcFilename(newName)
+  return isValid && newName !== name
+})
+
+const renameExtension = computed(() => {
+  if (!renameTarget.value) return ''
+  return renameTarget.value.name.slice(renameTarget.value.name.lastIndexOf('.'))
+})
+
+const renameFilename = computed(() => `${renameValue.value}${renameExtension.value}`)
 
 function togglePanel() {
   isOpen.value = !isOpen.value
@@ -34,7 +55,7 @@ function selectDbc(filename: string) {
 }
 
 function deleteDbc(filename: string) {
-  dbcStore.deleteDbc(filename)
+  deleteTarget.value = { type: 'dbc', name: filename }
 }
 
 function showLogsTab() {
@@ -46,6 +67,56 @@ function showLogsTab() {
 
 function downloadLog(name: string, url: string) {
   logStore.downloadLog({ name, url })
+}
+
+function startRename(type: 'log' | 'dbc', name: string) {
+  if (
+    (type === 'log' && (isActiveLog({ name }) || logStore.mutatingName !== null))
+    || (type === 'dbc' && dbcStore.mutatingName !== null)
+  ) return
+
+  renameTarget.value = { type, name }
+  renameValue.value = name.slice(0, name.lastIndexOf('.'))
+}
+
+function cancelRename() {
+  renameTarget.value = null
+  renameValue.value = ''
+}
+
+async function saveRename() {
+  if (!renameTarget.value || !renameIsValid.value) return
+
+  const { type, name } = renameTarget.value
+  const renamed = type === 'log'
+    ? await logStore.renameLog(name, renameFilename.value)
+    : await dbcStore.renameDbc(name, renameFilename.value)
+
+  if (renamed) cancelRename()
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value) return
+
+  const { type, name } = deleteTarget.value
+  if (type === 'log') {
+    await logStore.deleteLog(name)
+  } else {
+    await dbcStore.deleteDbc(name)
+  }
+  deleteTarget.value = null
+}
+
+function isRenaming(type: 'log' | 'dbc', name: string) {
+  return renameTarget.value?.type === type && renameTarget.value.name === name
+}
+
+function isLogActionDisabled(log: { name: string; active?: boolean }) {
+  return isActiveLog(log) || logStore.mutatingName !== null
+}
+
+function isDbcActionDisabled() {
+  return dbcStore.mutatingName !== null
 }
 
 defineExpose({ togglePanel })
@@ -171,10 +242,14 @@ onMounted(() => {
               class="file-item"
               :class="{ 'is-logging': isActiveLog(log) }"
             >
-              <div class="file-info">
+              <div v-if="!isRenaming('log', log.name)" class="file-info">
                 <span class="status-indicator"></span>
                 <div class="file-details">
-                  <span class="filename">{{ log.name }}</span>
+                  <span
+                    class="filename renameable-filename"
+                    :title="isActiveLog(log) ? 'Stop logging before renaming this file' : 'Double-click to rename'"
+                    @dblclick.stop="startRename('log', log.name)"
+                  >{{ log.name }}</span>
                   <span class="file-stats">
                     <template v-if="typeof log.size === 'number'">{{ formatSize(log.size) }}</template>
                     <template v-if="typeof log.size === 'number' && formatLogDate(log)"> &bull; </template>
@@ -183,15 +258,43 @@ onMounted(() => {
                   </span>
                 </div>
               </div>
-              <button
-                :id="`download-log-${log.name.replace(/\./g, '-')}-btn`"
-                class="download-btn"
-                :disabled="logStore.downloadingName === log.name"
-                @click.stop="downloadLog(log.name, log.url)"
-                title="Download"
-              >
-                {{ logStore.downloadingName === log.name ? 'Saving...' : 'Download' }}
-              </button>
+              <div v-else class="rename-row">
+                <input
+                  v-model="renameValue"
+                  class="rename-input"
+                  :aria-label="`New filename stem for ${log.name}`"
+                  @keydown.enter.prevent="saveRename"
+                  @keydown.escape.prevent="cancelRename"
+                />
+                <span class="rename-extension" aria-hidden="true">{{ renameExtension }}</span>
+                <button class="rename-save-btn" :disabled="!renameIsValid || logStore.mutatingName !== null" @click.stop="saveRename">Save</button>
+                <button class="rename-cancel-btn" :disabled="logStore.mutatingName !== null" @click.stop="cancelRename">Cancel</button>
+              </div>
+              <div v-if="!isRenaming('log', log.name)" class="file-actions">
+                <button
+                  :id="`download-log-${log.name.replace(/\./g, '-')}-btn`"
+                  class="download-btn"
+                  :disabled="logStore.downloadingName === log.name || logStore.mutatingName !== null"
+                  @click.stop="downloadLog(log.name, log.url)"
+                  :title="logStore.downloadingName === log.name ? 'Saving…' : 'Download'"
+                  :aria-label="logStore.downloadingName === log.name ? `Saving ${log.name}` : `Download ${log.name}`"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M10 2a1 1 0 0 1 1 1v7.586l2.293-2.293a1 1 0 0 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 1.414-1.414L9 10.586V3a1 1 0 0 1 1-1Zm-6 14a1 1 0 0 1 1-1h10a1 1 0 1 1 0 2H5a1 1 0 0 1-1-1Z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+                <button
+                  class="delete-btn"
+                  :disabled="isLogActionDisabled(log)"
+                  @click.stop="deleteTarget = { type: 'log', name: log.name }"
+                  :title="isActiveLog(log) ? 'Stop logging before deleting this file' : 'Delete'"
+                  aria-label="Delete log"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M9 2a1 1 0 0 0-.894.553L7.382 4H4a1 1 0 0 0 0 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a1 1 0 1 0 0-2h-3.382l-.724-1.447A1 1 0 0 0 11 2H9zM7 8a1 1 0 0 1 2 0v6a1 1 0 1 1-2 0V8zm5-1a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -220,18 +323,37 @@ onMounted(() => {
               class="file-item"
               :class="{ 'is-active': dbcStore.activeDbc === filename.name }"
             >
-              <div class="file-info" @click="selectDbc(filename.name)">
+              <div v-if="!isRenaming('dbc', filename.name)" class="file-info" @click="selectDbc(filename.name)">
                 <span class="status-indicator"></span>
                 <div class="file-details">
-                  <span class="filename">{{ filename.name }}</span>
+                  <span
+                    class="filename renameable-filename"
+                    title="Double-click to rename"
+                    @click.stop
+                    @dblclick.stop="startRename('dbc', filename.name)"
+                  >{{ filename.name }}</span>
                   <span class="file-stats">{{ formatSize(filename.size) }} &bull; {{ formatDate(filename.mtime) }}</span>
                 </div>
               </div>
-              <button class="delete-btn" @click.stop="deleteDbc(filename.name)" title="Delete">
-                <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-                  <path fill-rule="evenodd" d="M9 2a1 1 0 0 0-.894.553L7.382 4H4a1 1 0 0 0 0 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a1 1 0 1 0 0-2h-3.382l-.724-1.447A1 1 0 0 0 11 2H9zM7 8a1 1 0 0 1 2 0v6a1 1 0 1 1-2 0V8zm5-1a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1z" clip-rule="evenodd" />
-                </svg>
-              </button>
+              <div v-else class="rename-row">
+                <input
+                  v-model="renameValue"
+                  class="rename-input"
+                  :aria-label="`New filename stem for ${filename.name}`"
+                  @keydown.enter.prevent="saveRename"
+                  @keydown.escape.prevent="cancelRename"
+                />
+                <span class="rename-extension" aria-hidden="true">{{ renameExtension }}</span>
+                <button class="rename-save-btn" :disabled="!renameIsValid || dbcStore.mutatingName !== null" @click.stop="saveRename">Save</button>
+                <button class="rename-cancel-btn" :disabled="dbcStore.mutatingName !== null" @click.stop="cancelRename">Cancel</button>
+              </div>
+              <div v-if="!isRenaming('dbc', filename.name)" class="file-actions">
+                <button class="delete-btn" :disabled="isDbcActionDisabled()" @click.stop="deleteDbc(filename.name)" title="Delete" aria-label="Delete DBC">
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M9 2a1 1 0 0 0-.894.553L7.382 4H4a1 1 0 0 0 0 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2 2V6a1 1 0 1 0 0-2h-3.382l-.724-1.447A1 1 0 0 0 11 2H9zM7 8a1 1 0 0 1 2 0v6a1 1 0 1 1-2 0V8zm5-1a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -243,6 +365,16 @@ onMounted(() => {
   <Transition name="fade">
     <div v-if="isOpen" class="backdrop" @click="isOpen = false"></div>
   </Transition>
+  <ConfirmDialog
+    :show="deleteTarget !== null"
+    title="Delete file?"
+    :message="deleteTarget ? `Delete ${deleteTarget.name}? This cannot be undone.` : ''"
+    confirm-text="Delete"
+    danger
+    @confirm="confirmDelete"
+    @cancel="deleteTarget = null"
+    @close="deleteTarget = null"
+  />
 </template>
 
 <style scoped>
@@ -448,6 +580,12 @@ onMounted(() => {
   transition: all 0.3s;
 }
 
+.file-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .delete-btn,
 .download-btn {
   background: none;
@@ -463,10 +601,80 @@ onMounted(() => {
 .file-item:hover .download-btn {
   opacity: 1;
 }
-.delete-btn:hover,
-.download-btn:hover {
+.delete-btn:hover {
   color: var(--color-danger-text);
   background: rgba(239, 68, 68, 0.1);
+}
+
+.download-btn:hover {
+  color: var(--color-blue-text);
+  background: var(--color-blue-bg-glow);
+}
+
+.download-btn {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 8px;
+}
+
+.download-btn:disabled,
+.delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.renameable-filename {
+  cursor: text;
+}
+
+.rename-row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rename-input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.rename-extension {
+  color: var(--color-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rename-save-btn,
+.rename-cancel-btn {
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.rename-save-btn {
+  background: var(--color-blue-bg-glow);
+  color: var(--color-blue-text);
+}
+
+.rename-cancel-btn {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.rename-save-btn:disabled,
+.rename-cancel-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .refresh-btn {
