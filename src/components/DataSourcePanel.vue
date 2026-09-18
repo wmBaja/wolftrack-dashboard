@@ -134,6 +134,10 @@ async function disconnectDaq() {
 
 async function stopDataSource() {
   await dataSource.stop()
+  if (dataSource.status === 'stopped') {
+    logData.stopPolling()
+    logData.clearBuffers()
+  }
 }
 
 async function discoverDaqs() {
