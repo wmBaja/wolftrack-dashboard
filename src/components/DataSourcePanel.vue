@@ -250,12 +250,32 @@ const healthSummary = computed(() => {
 })
 
 const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
+
+function clampProgress(value: number) {
+  if (!Number.isFinite(value)) return 0
+
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+const isLogIndexing = computed(() => logData.status.status === 'loading')
+const logIndexProgress = computed(() => {
+  if (logData.status.status === 'ready') return 100
+
+  return clampProgress(logData.status.progress)
+})
+const logIndexStatusText = computed(() => {
+  if (isLogIndexing.value) return `Indexing (${logIndexProgress.value}%)`
+  if (logData.status.status === 'ready') return 'Indexed (100%)'
+
+  return 'Idle'
+})
 </script>
 
 <template>
   <button id="datasource-config-btn" class="datasource-trigger" @click="openPanel">
     <span class="status-dot" :style="{ background: daqStatusColor }" />
     <span class="trigger-label">Data Source</span>
+    <span v-if="dataSource.config.source === 'logfile' && isLogIndexing" class="status-spinner" aria-hidden="true" />
     <span class="trigger-status">{{ daqStatusLabel }}</span>
     <svg class="chevron" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
       <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" />
@@ -272,10 +292,22 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
         <div>
           <h2 class="panel-title">Data Source</h2>
           <span v-if="sourceMode === 'zmq'" class="panel-status" :style="{ color: daqStatusColor }">● DAQ {{ daqStatusLabel }}</span>
-          <span v-else class="panel-status" style="color: var(--color-blue-text)">
-            ● Log File 
-            <span v-if="logData.status.status === 'loading'">Indexing ({{ logData.status.progress }}%)</span>
-            <span v-else-if="logData.status.status === 'ready'">Indexed</span>
+          <span v-else class="panel-status log-panel-status" :style="{ color: daqStatusColor }">
+            <span>● Log File</span>
+            <span v-if="isLogIndexing" class="status-spinner" aria-hidden="true" />
+            <span v-if="isLogIndexing || logData.status.status === 'ready'">{{ logIndexStatusText }}</span>
+            <span
+              v-if="isLogIndexing"
+              class="log-index-progress"
+              role="progressbar"
+              aria-label="Log file indexing progress"
+              :aria-valuemin="0"
+              :aria-valuemax="100"
+              :aria-valuenow="logIndexProgress"
+              :aria-valuetext="logIndexStatusText"
+            >
+              <span class="log-index-progress-bar" :style="{ width: `${logIndexProgress}%` }" />
+            </span>
           </span>
         </div>
         <button class="close-btn" @click="isOpen = false" aria-label="Close">×</button>
@@ -618,6 +650,40 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   letter-spacing: 0.02em;
   margin-top: 3px;
   display: block;
+}
+
+.log-panel-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.status-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(245, 158, 11, 0.28);
+  border-top-color: var(--color-warning);
+  border-radius: 50%;
+  animation: dataSourceSpin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.log-index-progress {
+  width: 100px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(0, 0, 0);
+  flex-shrink: 0;
+}
+
+.log-index-progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-warning);
+  transition: width 0.25s ease;
 }
 
 .close-btn {
@@ -974,6 +1040,12 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dataSourceSpin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
