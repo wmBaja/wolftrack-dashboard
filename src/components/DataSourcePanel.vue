@@ -27,7 +27,7 @@ watch(() => [dataSource.config.source, dataSource.status], ([source, status]) =>
 const isOpen = ref(false)
 const sourceMode = ref<'zmq' | 'logfile'>(dataSource.config.source)
 const logFilePath = ref<string>(dataSource.config.log_file ?? '')
-const playbackSpeed = ref<number>(dataSource.config.playback_speed ?? 1.0)
+const playbackSpeed = ref<number>(dataSource.config.playback_speed ?? 0.0)
 const liveBufferWindowSeconds = ref<number>(dataSource.config.live_buffer_window_seconds ?? 15)
 const daqHost = ref<string>(daqConnection.target.host)
 const daqPort = ref<number>(daqConnection.target.port || 5000)
@@ -40,7 +40,7 @@ function isCurrentDaqTarget(host: string, port: number) {
 function syncDraftState() {
   sourceMode.value = dataSource.config.source
   logFilePath.value = dataSource.config.log_file ?? ''
-  playbackSpeed.value = dataSource.config.playback_speed ?? 1.0
+  playbackSpeed.value = dataSource.config.playback_speed ?? 0.0
   liveBufferWindowSeconds.value = dataSource.config.live_buffer_window_seconds ?? 15
   daqHost.value = daqConnection.target.host
   daqPort.value = daqConnection.target.port || 5000
@@ -108,7 +108,7 @@ async function connectToDaq() {
     {
       source: 'zmq',
       log_file: null,
-      playback_speed: 1.0,
+      playback_speed: 0.0,
       live_buffer_window_seconds: liveBufferWindowSeconds.value,
     },
     {
