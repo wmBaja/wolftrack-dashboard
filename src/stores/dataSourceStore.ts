@@ -55,7 +55,7 @@ function normalizeDataSourceConfig(value: unknown): DataSourceConfig {
     source: raw?.source === 'logfile' ? 'logfile' : 'zmq',
     log_file: raw?.log_file ?? null,
     dbc_file: raw?.dbc_file ?? null,
-    playback_speed: typeof raw?.playback_speed === 'number' ? raw.playback_speed : 1.0,
+    playback_speed: typeof raw?.playback_speed === 'number' ? raw.playback_speed : 0.0,
     live_buffer_window_seconds: normalizeLiveBufferWindowSeconds(raw?.live_buffer_window_seconds),
   }
 }
@@ -67,7 +67,7 @@ export const useDataSourceStore = defineStore('dataSource', () => {
     source: 'zmq',
     log_file: null,
     dbc_file: null,
-    playback_speed: 1.0,
+    playback_speed: 0.0,
     live_buffer_window_seconds: DEFAULT_LIVE_BUFFER_WINDOW_SECONDS,
   })
 

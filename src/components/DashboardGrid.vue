@@ -16,6 +16,16 @@ interface WidgetExpose {
   setLoading: (value: boolean) => void
 }
 
+interface GridPosition {
+  x: number
+  y: number
+}
+
+interface GridSize {
+  w: number
+  h: number
+}
+
 const componentMap: Record<string, Component> = {
   [WIDGET_TYPES.BASE]: BaseWidget,
   [WIDGET_TYPES.CHART]: ChartWidget,
@@ -24,6 +34,10 @@ const componentMap: Record<string, Component> = {
 const widgetRefs = ref<Record<string, WidgetExpose>>({})
 const showClearAllConfirm = ref(false)
 const gridWrapperRef = ref<HTMLElement>()
+const GRID_COLS = 16
+const GRID_ROW_HEIGHT = 30
+const GRID_MARGIN = 5
+const FALLBACK_CHART_SIZE = { w: 5, h: 15 }
 
 onMounted(() => {
   widgetStore.loadFromLocalStorage()
@@ -48,30 +62,47 @@ function setWidgetRef(widgetId: string, el: WidgetExpose | null) {
   }
 }
 
-// Convert mouse position to grid coordinates
-function mouseToGridPosition(event: MouseEvent): { x: number; y: number } {
-  if (!gridWrapperRef.value) return { x: 0, y: 0 }
+function getGridMetrics() {
+  if (!gridWrapperRef.value) return null
 
   const gridRect = gridWrapperRef.value.getBoundingClientRect()
-  const rowHeight = 30 // matches :row-height prop
-  const margin = 5 // matches :margin prop
-  const colNum = 16 // matches :col-num prop
-
-  // Calculate relative position within the grid
-  const relativeX = event.clientX - gridRect.left + gridWrapperRef.value.scrollLeft
-  const relativeY = event.clientY - gridRect.top + gridWrapperRef.value.scrollTop
-
-  // Calculate column width (accounting for margins)
-  const totalMarginWidth = margin * (colNum - 1)
+  const rowPitch = GRID_ROW_HEIGHT + GRID_MARGIN
+  const totalMarginWidth = GRID_MARGIN * (GRID_COLS - 1)
   const availableWidth = gridRect.width - totalMarginWidth
-  const colWidth = availableWidth / colNum
+  const colWidth = availableWidth / GRID_COLS
 
-  // Convert pixel position to grid coordinates
-  const col = Math.floor(relativeX / (colWidth + margin))
-  const row = Math.floor(relativeY / (rowHeight + margin))
+  return { gridRect, colWidth, rowPitch }
+}
+
+function getInitialChartSize(): GridSize {
+  const metrics = getGridMetrics()
+  if (!metrics) return FALLBACK_CHART_SIZE
+
+  const targetWidth = metrics.gridRect.width / 3
+  const targetHeight = metrics.gridRect.height / 2
 
   return {
-    x: Math.max(0, Math.min(col, colNum - 1)),
+    w: Math.max(4, Math.min(GRID_COLS, Math.round((targetWidth + GRID_MARGIN) / (metrics.colWidth + GRID_MARGIN)))),
+    h: Math.max(4, Math.round((targetHeight + GRID_MARGIN) / (GRID_ROW_HEIGHT + GRID_MARGIN))),
+  }
+}
+
+function mouseToGridPosition(event: MouseEvent, size: GridSize = { w: 1, h: 1 }): GridPosition {
+  if (!gridWrapperRef.value) return { x: 0, y: 0 }
+
+  const metrics = getGridMetrics()
+  if (!metrics) return { x: 0, y: 0 }
+
+  // Calculate relative position within the grid
+  const relativeX = event.clientX - metrics.gridRect.left + gridWrapperRef.value.scrollLeft
+  const relativeY = event.clientY - metrics.gridRect.top + gridWrapperRef.value.scrollTop
+
+  // Convert pixel position to grid coordinates
+  const col = Math.floor(relativeX / (metrics.colWidth + GRID_MARGIN))
+  const row = Math.floor(relativeY / metrics.rowPitch)
+
+  return {
+    x: Math.max(0, Math.min(col, GRID_COLS - size.w)),
     y: Math.max(0, row)
   }
 }
@@ -84,7 +115,8 @@ function handleGridContextMenu(event: MouseEvent) {
 
   event.preventDefault()
 
-  const gridPos = mouseToGridPosition(event)
+  const chartSize = getInitialChartSize()
+  const gridPos = mouseToGridPosition(event, chartSize)
 
   ContextMenu.showContextMenu({
     x: event.x,
@@ -93,14 +125,9 @@ function handleGridContextMenu(event: MouseEvent) {
     zIndex: 1000,
     items: [
       {
-        label: 'Add Base Widget',
-        icon: h('span', '➕'),
-        onClick: () => widgetStore.addWidget(WIDGET_TYPES.BASE, gridPos),
-      },
-      {
         label: 'Add Chart Widget',
         icon: h('span', '➕'),
-        onClick: () => widgetStore.addWidget(WIDGET_TYPES.CHART, gridPos),
+        onClick: () => widgetStore.addWidget(WIDGET_TYPES.CHART, { ...gridPos, ...chartSize }),
       },
       { divided: true },
       {
@@ -121,15 +148,15 @@ function handleGridContextMenu(event: MouseEvent) {
     <div ref="gridWrapperRef" class="grid-wrapper custom-scrollbar">
       <GridLayout
         v-model:layout="widgetStore.widgets"
-        :col-num="16"
-        :row-height="30"
+        :col-num="GRID_COLS"
+        :row-height="GRID_ROW_HEIGHT"
         :is-draggable="true"
         :is-resizable="true"
         :is-bounded="false"
-        :responsive="true"
-        :margin="[5, 5]"
+        :responsive="false"
+        :margin="[GRID_MARGIN, GRID_MARGIN]"
         :use-css-transforms="true"
-        :prevent-collision="false"
+        :prevent-collision="true"
         :vertical-compact="false"
         @layout-updated="handleLayoutUpdate"
       >

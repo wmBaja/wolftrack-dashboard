@@ -150,6 +150,8 @@ function handleContextMenu(event: MouseEvent) {
           store.addWidget(widget.value.type as WIDGET_TYPES, {
             x: widget.value.x + 1,
             y: widget.value.y + 1,
+            w: widget.value.w,
+            h: widget.value.h,
           })
         }
       },
@@ -343,7 +345,7 @@ defineExpose({ handleRefresh, startEditTitle, setLoading, toggleConfig })
 .base-widget__content {
   flex: 1;
   padding: 16px;
-  overflow: auto;
+  overflow: hidden;
   min-height: 0;
   height: 100%;
 }
@@ -378,7 +380,8 @@ defineExpose({ handleRefresh, startEditTitle, setLoading, toggleConfig })
   flex-direction: column;
   gap: 10px;
   height: 100%;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .signal-list {
@@ -414,6 +417,7 @@ defineExpose({ handleRefresh, startEditTitle, setLoading, toggleConfig })
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 .save-btn:hover {
   opacity: 0.9;
