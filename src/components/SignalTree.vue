@@ -173,6 +173,7 @@ function handleSignalClick(sig: TreeSignal) {
   flex-direction: column;
   gap: 8px;
   height: 100%;
+  min-height: 0;
 }
 
 .search-input {
@@ -195,6 +196,7 @@ function handleSignalClick(sig: TreeSignal) {
   font-size: 13px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
   background: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: 4px;

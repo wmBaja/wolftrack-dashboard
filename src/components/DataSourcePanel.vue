@@ -27,7 +27,7 @@ watch(() => [dataSource.config.source, dataSource.status], ([source, status]) =>
 const isOpen = ref(false)
 const sourceMode = ref<'zmq' | 'logfile'>(dataSource.config.source)
 const logFilePath = ref<string>(dataSource.config.log_file ?? '')
-const playbackSpeed = ref<number>(dataSource.config.playback_speed ?? 1.0)
+const playbackSpeed = ref<number>(dataSource.config.playback_speed ?? 0.0)
 const liveBufferWindowSeconds = ref<number>(dataSource.config.live_buffer_window_seconds ?? 15)
 const daqHost = ref<string>(daqConnection.target.host)
 const daqPort = ref<number>(daqConnection.target.port || 5000)
@@ -40,7 +40,7 @@ function isCurrentDaqTarget(host: string, port: number) {
 function syncDraftState() {
   sourceMode.value = dataSource.config.source
   logFilePath.value = dataSource.config.log_file ?? ''
-  playbackSpeed.value = dataSource.config.playback_speed ?? 1.0
+  playbackSpeed.value = dataSource.config.playback_speed ?? 0.0
   liveBufferWindowSeconds.value = dataSource.config.live_buffer_window_seconds ?? 15
   daqHost.value = daqConnection.target.host
   daqPort.value = daqConnection.target.port || 5000
@@ -94,7 +94,6 @@ async function applyLogfileConfig() {
 
   if (dataSource.status !== 'error') {
     await dbcStore.fetchSignals()
-    isOpen.value = false
   }
 }
 
@@ -109,7 +108,7 @@ async function connectToDaq() {
     {
       source: 'zmq',
       log_file: null,
-      playback_speed: 1.0,
+      playback_speed: 0.0,
       live_buffer_window_seconds: liveBufferWindowSeconds.value,
     },
     {
@@ -122,23 +121,23 @@ async function connectToDaq() {
   const connected = await daqConnection.connect({ autostart: isResumingReadyStream })
   if (connected) {
     await dbcStore.fetchSignals()
-    isOpen.value = false
   }
 }
 
 async function stopDaqStreaming() {
   await daqConnection.stopStreaming()
-  isOpen.value = false
 }
 
 async function disconnectDaq() {
   await daqConnection.disconnect()
-  isOpen.value = false
 }
 
 async function stopDataSource() {
   await dataSource.stop()
-  isOpen.value = false
+  if (dataSource.status === 'stopped') {
+    logData.stopPolling()
+    logData.clearBuffers()
+  }
 }
 
 async function discoverDaqs() {
@@ -158,6 +157,10 @@ const canStartReadyStream = computed(() => {
 
 const canDisconnectDaq = computed(() => {
   return daqConnection.connectionState === 'connected' || daqConnection.connectionState === 'ready'
+})
+
+const isLiveBufferWindowLocked = computed(() => {
+  return sourceMode.value === 'zmq' && daqConnection.isConnected
 })
 
 const daqPrimaryActionLabel = computed(() => {
@@ -251,12 +254,32 @@ const healthSummary = computed(() => {
 })
 
 const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
+
+function clampProgress(value: number) {
+  if (!Number.isFinite(value)) return 0
+
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+const isLogIndexing = computed(() => logData.status.status === 'loading')
+const logIndexProgress = computed(() => {
+  if (logData.status.status === 'ready') return 100
+
+  return clampProgress(logData.status.progress)
+})
+const logIndexStatusText = computed(() => {
+  if (isLogIndexing.value) return `Indexing (${logIndexProgress.value}%)`
+  if (logData.status.status === 'ready') return 'Indexed (100%)'
+
+  return 'Idle'
+})
 </script>
 
 <template>
   <button id="datasource-config-btn" class="datasource-trigger" @click="openPanel">
     <span class="status-dot" :style="{ background: daqStatusColor }" />
     <span class="trigger-label">Data Source</span>
+    <span v-if="dataSource.config.source === 'logfile' && isLogIndexing" class="status-spinner" aria-hidden="true" />
     <span class="trigger-status">{{ daqStatusLabel }}</span>
     <svg class="chevron" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
       <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06z" />
@@ -273,10 +296,22 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
         <div>
           <h2 class="panel-title">Data Source</h2>
           <span v-if="sourceMode === 'zmq'" class="panel-status" :style="{ color: daqStatusColor }">● DAQ {{ daqStatusLabel }}</span>
-          <span v-else class="panel-status" style="color: var(--color-blue-text)">
-            ● Log File 
-            <span v-if="logData.status.status === 'loading'">Indexing ({{ logData.status.progress }}%)</span>
-            <span v-else-if="logData.status.status === 'ready'">Indexed</span>
+          <span v-else class="panel-status log-panel-status" :style="{ color: daqStatusColor }">
+            <span>● Log File</span>
+            <span v-if="isLogIndexing" class="status-spinner" aria-hidden="true" />
+            <span v-if="isLogIndexing || logData.status.status === 'ready'">{{ logIndexStatusText }}</span>
+            <span
+              v-if="isLogIndexing"
+              class="log-index-progress"
+              role="progressbar"
+              aria-label="Log file indexing progress"
+              :aria-valuemin="0"
+              :aria-valuemax="100"
+              :aria-valuenow="logIndexProgress"
+              :aria-valuetext="logIndexStatusText"
+            >
+              <span class="log-index-progress-bar" :style="{ width: `${logIndexProgress}%` }" />
+            </span>
           </span>
         </div>
         <button class="close-btn" @click="isOpen = false" aria-label="Close">×</button>
@@ -352,6 +387,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
               step="0.5"
               v-model.number="liveBufferWindowSeconds"
               class="speed-slider"
+              :disabled="isLiveBufferWindowLocked"
             />
             <input
               id="live-buffer-window-number-input"
@@ -360,6 +396,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
               step="0.5"
               v-model.number="liveBufferWindowSeconds"
               class="speed-input"
+              :disabled="isLiveBufferWindowLocked"
               aria-label="Live buffer window seconds"
             />
           </div>
@@ -522,14 +559,26 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 </template>
 
 <style scoped>
+:global(:root) {
+  --data-source-space-sm: 8px;
+  --data-source-radius-sm: 8px;
+  --data-source-control-padding: 8px 11px;
+  --data-source-control-font-size: 12px;
+  --data-source-control-bg: rgba(0, 0, 0, 0.25);
+  --data-source-subtle-surface: rgba(255, 255, 255, 0.04);
+  --data-source-panel-border: rgba(255, 255, 255, 0.08);
+  --data-source-panel-shadow: 0 24px 56px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --data-source-footer-border: rgba(255, 255, 255, 0.06);
+}
+
 .datasource-trigger {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
   padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-hover);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--data-source-radius-sm);
   color: var(--color-text);
   font-size: 13px;
   font-weight: 500;
@@ -543,8 +592,8 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--data-source-space-sm);
+  height: var(--data-source-space-sm);
   border-radius: 50%;
   transition: background 0.3s;
 }
@@ -571,15 +620,15 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 
 .config-panel {
   position: fixed;
-  top: calc(var(--navbar-height) + 8px);
+  top: calc(var(--navbar-height) + var(--data-source-space-sm));
   right: 16px;
   width: min(420px, calc(100vw - 24px));
   max-height: calc(100vh - var(--navbar-height) - 24px);
   overflow-y: auto;
   background: var(--color-panel);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--data-source-panel-border);
   border-radius: 14px;
-  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  box-shadow: var(--data-source-panel-shadow);
   z-index: 50;
   padding: 20px;
   display: flex;
@@ -607,6 +656,40 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   display: block;
 }
 
+.log-panel-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.status-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(245, 158, 11, 0.28);
+  border-top-color: var(--color-warning);
+  border-radius: 50%;
+  animation: dataSourceSpin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.log-index-progress {
+  width: 100px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(0, 0, 0);
+  flex-shrink: 0;
+}
+
+.log-index-progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-warning);
+  transition: width 0.25s ease;
+}
+
 .close-btn {
   background: none;
   border: none;
@@ -626,12 +709,12 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .error-banner {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
   padding: 10px 12px;
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--data-source-radius-sm);
+  font-size: var(--data-source-control-font-size);
   color: var(--color-danger-text);
   line-height: 1.5;
 }
@@ -648,7 +731,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .field-label {
-  font-size: 12px;
+  font-size: var(--data-source-control-font-size);
   font-weight: 600;
   color: var(--color-muted);
   text-transform: uppercase;
@@ -656,7 +739,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 }
 
 .required {
-  color: #ef4444;
+  color: var(--color-danger);
   margin-left: 2px;
 }
 
@@ -675,7 +758,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 
 .toggle-group {
   display: flex;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
 }
 
 .toggle-btn {
@@ -685,9 +768,9 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   justify-content: center;
   gap: 6px;
   padding: 9px 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--data-source-subtle-surface);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--data-source-radius-sm);
   color: var(--color-muted);
   font-size: 13px;
   font-weight: 500;
@@ -711,18 +794,18 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .speed-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
 }
 
 .text-input,
 .port-input,
 .speed-input {
   min-width: 0;
-  padding: 8px 11px;
-  background: rgba(0, 0, 0, 0.25);
+  padding: var(--data-source-control-padding);
+  background: var(--data-source-control-bg);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--data-source-radius-sm);
+  font-size: var(--data-source-control-font-size);
   color: var(--color-text);
   transition: border-color 0.15s;
 }
@@ -776,7 +859,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   border: 1px solid var(--color-blue-border);
   border-radius: 7px;
   color: var(--color-blue-text);
-  font-size: 12px;
+  font-size: var(--data-source-control-font-size);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -800,7 +883,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   border: 1px solid var(--color-danger-border);
   border-radius: 7px;
   color: var(--color-danger-text);
-  font-size: 12px;
+  font-size: var(--data-source-control-font-size);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -812,16 +895,16 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .chip-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
 }
 
 .chip-btn {
   padding: 7px 10px;
   border-radius: 999px;
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--data-source-subtle-surface);
   color: var(--color-text);
-  font-size: 12px;
+  font-size: var(--data-source-control-font-size);
   cursor: pointer;
 }
 
@@ -834,7 +917,7 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
 .health-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--data-source-space-sm);
 }
 
 .health-card {
@@ -866,24 +949,30 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   text-align: center;
 }
 
+.speed-slider:disabled,
+.speed-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .panel-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--data-source-footer-border);
 }
 
 .footer-right {
   display: flex;
-  gap: 8px;
+  gap: var(--data-source-space-sm);
   margin-left: auto;
 }
 
 .action-btn {
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: var(--data-source-radius-sm);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -955,6 +1044,12 @@ const activeDbcLabel = computed(() => dbcStore.activeDbc || 'No DBC selected')
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dataSourceSpin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

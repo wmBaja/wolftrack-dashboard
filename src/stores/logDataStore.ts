@@ -20,7 +20,7 @@ export const useLogDataStore = defineStore('logData', () => {
   const buffers = ref<Record<string, { timestamps: number[], values: number[] }>>({})
   const dataVersion = ref(0)
   
-  const playbackSpeed = ref(1.0)
+  const playbackSpeed = ref(0.0)
   const currentTime = ref(0)
   const isPlaying = ref(false)
   
@@ -90,7 +90,7 @@ export const useLogDataStore = defineStore('logData', () => {
           currentTime.value = data.start_ts
           import('./dataSourceStore').then(m => {
             const ds = m.useDataSourceStore()
-            startPlayback(ds.config.playback_speed ?? 1.0)
+            startPlayback(ds.config.playback_speed ?? 0.0)
           })
         }
       }

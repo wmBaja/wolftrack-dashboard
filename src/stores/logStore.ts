@@ -4,6 +4,7 @@ import { useDaqConnectionStore } from './daqConnectionStore'
 
 const REQUEST_TIMEOUT_MS = 4000
 const DEFAULT_DAQ_LOG_API_PATH = '/api/logs'
+const LOG_FILE_NAME_PATTERN = /^[^/\\]+\.(blf|log)$/
 
 export interface RemoteLogFileInfo {
   name: string
@@ -35,7 +36,7 @@ function getDaqLogApiBase() {
 }
 
 function normalizeRemoteLog(
-  entry: { name?: string; download_url?: string; url?: string; size?: number; mtime?: number; active?: boolean; current?: boolean },
+  entry: { name?: string; download_url?: string; url?: string; size?: number; mtime?: number; modified?: number; active?: boolean; current?: boolean },
   apiBase: string,
 ): RemoteLogFileInfo | null {
   const name = entry.name?.trim()
@@ -55,8 +56,9 @@ function normalizeRemoteLog(
     normalized.size = entry.size
   }
 
-  if (typeof entry.mtime === 'number') {
-    normalized.mtime = entry.mtime
+  const modifiedTimestamp = entry.mtime ?? entry.modified
+  if (typeof modifiedTimestamp === 'number') {
+    normalized.mtime = modifiedTimestamp
   }
 
   if (typeof entry.active === 'boolean') {
@@ -73,6 +75,20 @@ export const useLogStore = defineStore('logStore', () => {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const downloadingName = ref<string | null>(null)
+  const mutatingName = ref<string | null>(null)
+
+  function isValidLogFilename(filename: string) {
+    return filename.trim() === filename && LOG_FILE_NAME_PATTERN.test(filename) && !filename.includes('..')
+  }
+
+  async function getResponseError(response: Response, fallback: string) {
+    try {
+      const payload = await response.json() as { error?: string; detail?: string }
+      return payload.error ?? payload.detail ?? fallback
+    } catch {
+      return fallback
+    }
+  }
 
   async function fetchLogs() {
     isLoading.value = true
@@ -86,8 +102,8 @@ export const useLogStore = defineStore('logStore', () => {
       }
 
       const payload = await response.json() as
-        | Array<{ name?: string; download_url?: string; url?: string; size?: number; mtime?: number; active?: boolean; current?: boolean }>
-        | { files?: Array<{ name?: string; download_url?: string; url?: string; size?: number; mtime?: number; active?: boolean; current?: boolean }> }
+        | Array<{ name?: string; download_url?: string; url?: string; size?: number; mtime?: number; modified?: number; active?: boolean; current?: boolean }>
+        | { files?: Array<{ name?: string; download_url?: string; url?: string; size?: number; mtime?: number; modified?: number; active?: boolean; current?: boolean }> }
 
       const files = Array.isArray(payload) ? payload : payload.files ?? []
       availableLogs.value = files
@@ -124,12 +140,70 @@ export const useLogStore = defineStore('logStore', () => {
     }
   }
 
+  async function deleteLog(filename: string) {
+    if (!isValidLogFilename(filename)) {
+      error.value = 'Filename must be a .blf or .log file name.'
+      return false
+    }
+
+    mutatingName.value = filename
+    error.value = null
+    try {
+      const apiBase = getDaqLogApiBase()
+      const response = await withTimeout(`${apiBase}/${encodeURIComponent(filename)}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        throw new Error(await getResponseError(response, 'Delete failed.'))
+      }
+      await fetchLogs()
+      return true
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
+      return false
+    } finally {
+      mutatingName.value = null
+    }
+  }
+
+  async function renameLog(filename: string, newName: string) {
+    if (!isValidLogFilename(newName)) {
+      error.value = 'New filename must be a .blf or .log file name.'
+      return false
+    }
+
+    mutatingName.value = filename
+    error.value = null
+    try {
+      const apiBase = getDaqLogApiBase()
+      const response = await withTimeout(`${apiBase}/${encodeURIComponent(filename)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_name: newName }),
+      })
+      if (!response.ok) {
+        throw new Error(await getResponseError(response, 'Rename failed.'))
+      }
+      await fetchLogs()
+      return true
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : String(e)
+      return false
+    } finally {
+      mutatingName.value = null
+    }
+  }
+
   return {
     availableLogs,
     isLoading,
     error,
     downloadingName,
+    mutatingName,
     fetchLogs,
     downloadLog,
+    deleteLog,
+    renameLog,
+    isValidLogFilename,
   }
 })

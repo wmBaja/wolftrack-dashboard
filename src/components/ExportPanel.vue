@@ -101,7 +101,7 @@ async function exportFile() {
     const uploadData = new FormData()
     uploadData.append('source', 'logfile')
     uploadData.append('log_file_upload', selectedFile.value)
-    uploadData.append('playback_speed', '1.0')
+    uploadData.append('playback_speed', '0.0')
 
     const uploadResponse = await fetch(`${baseUrl}/api/upload_config`, {
       method: 'POST',
