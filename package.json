@@ -1,6 +1,6 @@
 {
   "name": "wolftrack",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "dist-electron/main.js",
   "type": "module",
   "engines": {
@@ -87,7 +87,7 @@
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6",
     "vite-plugin-vue-devtools": "^8.0.2",
-    "vitest": "^3.2.4",
+    "vitest": "^5.0.1",
     "vue-tsc": "^3.1.0"
   }
 }
