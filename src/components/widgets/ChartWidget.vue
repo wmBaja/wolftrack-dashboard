@@ -31,7 +31,7 @@ function getAlignedData(): AlignedData {
   if (signalsToPlot.length === 1) {
     const firstSig = signalsToPlot[0]
     if (!firstSig) return [[]]
-    
+
     if (isLive) {
         const buf = liveDataStore.buffers.get(firstSig)
         if (!buf || buf.length === 0) return [[], []]
@@ -40,7 +40,7 @@ function getAlignedData(): AlignedData {
     } else {
         const buf = logDataStore.buffers[firstSig]
         if (!buf) return [[], []]
-        
+
         const cutoff = logDataStore.currentTime
         let validLen = 0
         for (let i = 0; i < buf.timestamps.length; i++) {
@@ -48,7 +48,7 @@ function getAlignedData(): AlignedData {
             if (ts !== undefined && ts > cutoff) break
             validLen++
         }
-        
+
         return [buf.timestamps.slice(0, validLen), buf.values.slice(0, validLen)]
     }
   }
@@ -57,10 +57,10 @@ function getAlignedData(): AlignedData {
   let minTime = Infinity
   let maxTime = -Infinity
 
-  const activeBuffers = isLive 
+  const activeBuffers = isLive
     ? signalsToPlot.map(sig => liveDataStore.buffers.get(sig))
     : signalsToPlot.map(sig => logDataStore.buffers[sig])
-  
+
   activeBuffers.forEach(buf => {
     if (isLive) {
         const liveBuf = buf as RingBuffer | undefined
@@ -101,14 +101,14 @@ function getAlignedData(): AlignedData {
     if (buf) {
       const ts = isLive ? (buf as RingBuffer).getArrays().timestamps : (buf as LogBuffer).timestamps
       const vs = isLive ? (buf as RingBuffer).getArrays().values : (buf as LogBuffer).values
-      
+
       const cutoff = isLive ? Infinity : logDataStore.currentTime
 
       if (ts.length > 0) {
           for (let i = 0; i < ts.length; i++) {
             const t = ts[i]!
             if (t > cutoff) break
-            
+
             const v = vs[i]
             let bucketIdx = Math.floor((t - minTime) / bucketSize)
             if (bucketIdx >= numBuckets) bucketIdx = numBuckets - 1
@@ -174,8 +174,6 @@ defineExpose({ startEditTitle })
   color: var(--color-text-muted);
   gap: 10px;
 }
-
-
 
 .save-btn {
   margin-top: 10px;

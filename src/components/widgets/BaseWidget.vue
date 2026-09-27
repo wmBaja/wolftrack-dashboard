@@ -155,8 +155,8 @@ function handleContextMenu(event: MouseEvent) {
           })
         }
       },
+      divided: true,
     },
-    { divided: true },
     {
       label: 'Delete',
       icon: h('span', '🗑️'),
