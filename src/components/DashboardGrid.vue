@@ -172,7 +172,7 @@ function handleGridContextMenu(event: MouseEvent) {
         <GridItem
           v-for="item in widgetStore.widgets"
           :resize-option="{
-            edges: { left: true, right: true, top: true, bottom: true },
+            edges: { right: true, bottom: true },
           }"
           :key="item.i"
           v-bind="item"
