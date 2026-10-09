@@ -43,17 +43,14 @@ onMounted(() => {
   widgetStore.loadFromLocalStorage()
 })
 
-watch(
-  () => widgetStore.widgets.length,
-  () => {
-    const currentIds = new Set(widgetStore.widgets.map((w) => w.i))
-    Object.keys(widgetRefs.value).forEach((id) => {
-      if (!currentIds.has(id)) {
-        delete widgetRefs.value[id]
-      }
-    })
-  },
-)
+watch(() => widgetStore.widgets.length, () => {
+  const currentIds = new Set(widgetStore.widgets.map(w => w.i))
+  Object.keys(widgetRefs.value).forEach(id => {
+    if (!currentIds.has(id)) {
+      delete widgetRefs.value[id]
+    }
+  })
+})
 
 function handleLayoutUpdate(newLayout: Widget[]) {
   widgetStore.updateLayout(newLayout)
@@ -85,13 +82,7 @@ function getInitialChartSize(): GridSize {
   const targetHeight = metrics.gridRect.height / 2
 
   return {
-    w: Math.max(
-      4,
-      Math.min(
-        GRID_COLS,
-        Math.round((targetWidth + GRID_MARGIN) / (metrics.colWidth + GRID_MARGIN)),
-      ),
-    ),
+    w: Math.max(4, Math.min(GRID_COLS, Math.round((targetWidth + GRID_MARGIN) / (metrics.colWidth + GRID_MARGIN)))),
     h: Math.max(4, Math.round((targetHeight + GRID_MARGIN) / (GRID_ROW_HEIGHT + GRID_MARGIN))),
   }
 }
@@ -112,7 +103,7 @@ function mouseToGridPosition(event: MouseEvent, size: GridSize = { w: 1, h: 1 })
 
   return {
     x: Math.max(0, Math.min(col, GRID_COLS - size.w)),
-    y: Math.max(0, row),
+    y: Math.max(0, row)
   }
 }
 
@@ -171,9 +162,6 @@ function handleGridContextMenu(event: MouseEvent) {
       >
         <GridItem
           v-for="item in widgetStore.widgets"
-          :resize-option="{
-            edges: { right: true, bottom: true },
-          }"
           :key="item.i"
           v-bind="item"
           drag-allow-from=".base-widget__header"
