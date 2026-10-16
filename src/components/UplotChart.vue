@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import type { Point } from './DashboardGrid.vue'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { getVisibleSampleRates, type ChartRenderModel, type ChartSampleRate } from '@/lib/chartData'
@@ -19,6 +20,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   sampleRates: [rates: ChartSampleRate[]]
+  pointClick: [point: Point]
 }>()
 
 const plotHost = ref<HTMLElement>()
@@ -47,9 +49,9 @@ function createOptions(): uPlot.Options {
   const series: uPlot.Series[] = [
     {
       label: 'Time',
-      value: (_u, value) => value == null ? '-' : displayTime(value as number),
+      value: (_u, value) => (value == null ? '-' : displayTime(value as number)),
     },
-    ...props.model.series.map(seriesDefinition => ({
+    ...props.model.series.map((seriesDefinition) => ({
       label: seriesDefinition.label,
       scale: seriesDefinition.scaleKey,
       stroke: seriesDefinition.color,
@@ -65,7 +67,8 @@ function createOptions(): uPlot.Options {
       scale: 'x',
       stroke: '#cbd5e1',
       grid: { stroke: '#2d3342', width: 1 },
-      values: (_u, splits) => splits.map(value => `${(value - (props.timeOrigin ?? 0)).toFixed(1)}s`),
+      values: (_u, splits) =>
+        splits.map((value) => `${(value - (props.timeOrigin ?? 0)).toFixed(1)}s`),
     },
     ...props.model.scales.map((scale, index) => ({
       scale: scale.key,
@@ -91,9 +94,11 @@ function createOptions(): uPlot.Options {
       mount: (_u, legend) => legendHost.value?.appendChild(legend),
     },
     hooks: {
-      setScale: [instance => {
-        publishVisibleSampleRates(instance)
-      }],
+      setScale: [
+        (instance) => {
+          publishVisibleSampleRates(instance)
+        },
+      ],
     },
   }
 }
@@ -120,9 +125,58 @@ function syncData(resetScales: boolean) {
   publishVisibleSampleRates()
 }
 
+function handlePlotClick() {
+  const u = chart.value
+  const idx = u?.cursor.idx
+  if (!u || idx == null) return
+
+  const time = u.data[0]?.[idx]
+  if (time == null) return
+
+  // Aligned data can have gaps for a series at the cursor's timestamp. Pick
+  // the first series with a real value and use that series' unit scale.
+  const seriesIndex = props.model.series.findIndex((series, index) => {
+    return u.data[index + 1]?.[idx] != null && u.scales[series.scaleKey] != null
+  })
+  if (seriesIndex < 0) return
+
+  const series = props.model.series[seriesIndex]!
+  const value = u.data[seriesIndex + 1]?.[idx]
+  const xScale = u.scales.x
+  const yScale = u.scales[series.scaleKey]
+  if (value == null || !xScale || !yScale) return
+
+  const isVisible =
+    xScale.min != null && xScale.max != null &&
+    yScale.min != null && yScale.max != null &&
+    time >= xScale.min && time <= xScale.max &&
+    value >= yScale.min && value <= yScale.max
+  if (!isVisible) return
+
+  const overlay = u.root.querySelector('.u-over')
+  const widget = plotHost.value?.closest('.base-widget')
+  if (!overlay || !widget) return
+
+  const plotRect = overlay.getBoundingClientRect()
+  const widgetRect = widget.getBoundingClientRect()
+  const point: Point = {
+    values: { x: time - (props.timeOrigin ?? 0), y: value },
+    units: { x: 'secs', y: series.unit },
+    coords: {
+      x: plotRect.left - widgetRect.left + u.valToPos(time, 'x'),
+      y: plotRect.top - widgetRect.top + u.valToPos(value, series.scaleKey),
+    },
+  }
+
+  emit('pointClick', point)
+}
+
 function initChart() {
   if (!plotHost.value) return
   chart.value = new uPlot(createOptions(), props.model.data, plotHost.value)
+  plotHost.value.removeEventListener('click', handlePlotClick)
+  plotHost.value.addEventListener('click', handlePlotClick)
+
   structureKey = props.model.structureKey
   appliedResetRevision = props.resetViewRevision
   applyViewport()
@@ -150,26 +204,24 @@ function syncChartRect() {
 
 onMounted(initChart)
 
-watch(
-  [() => props.model, () => props.resetViewRevision],
-  ([model, resetRevision]) => {
-    if (!chart.value) return
-    if (model.structureKey !== structureKey) {
-      rebuildChart()
-      return
-    }
+watch([() => props.model, () => props.resetViewRevision], ([model, resetRevision]) => {
+  if (!chart.value) return
+  if (model.structureKey !== structureKey) {
+    rebuildChart()
+    return
+  }
 
-    const shouldReset = resetRevision !== appliedResetRevision
-    syncData(shouldReset)
-    appliedResetRevision = resetRevision
-  },
-)
+  const shouldReset = resetRevision !== appliedResetRevision
+  syncData(shouldReset)
+  appliedResetRevision = resetRevision
+})
 
 watch(() => props.viewport, scheduleViewport, { deep: true })
 
 onBeforeUnmount(() => {
   if (viewportFrame !== null) cancelAnimationFrame(viewportFrame)
   resizeObserver?.disconnect()
+  plotHost.value?.removeEventListener('click', handlePlotClick)
   chart.value?.destroy()
 })
 </script>

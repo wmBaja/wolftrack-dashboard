@@ -98,6 +98,7 @@ defineExpose({ startEditTitle })
           sync-key="wolftrack-dashboard-time"
           :time-origin="snapshot.timeOrigin"
           @sample-rates="sampleRates = $event"
+          @point-click="$emit('pointClick', $event)"
         />
       </div>
     </template>

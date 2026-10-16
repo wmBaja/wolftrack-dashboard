@@ -4,6 +4,7 @@ import { GridLayout, GridItem } from 'grid-layout-plus'
 import { useWidgetStore } from '@/stores/widgetStore'
 import ContextMenu from '@imengyu/vue3-context-menu'
 import BaseWidget from '@/components/widgets/BaseWidget.vue'
+import PointData from './widgets/PointData.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ChartWidget from '@/components/widgets/ChartWidget.vue'
 import LogWindowControl from '@/components/LogWindowControl.vue'
@@ -32,7 +33,24 @@ const componentMap: Record<string, Component> = {
   [WIDGET_TYPES.CHART]: ChartWidget,
 }
 
+export interface Point {
+  coords: {
+    x: number
+    y: number
+  }
+  values: {
+    x: number
+    y: number
+  }
+  units: {
+    x: string
+    y: string
+  }
+}
+
 const widgetRefs = ref<Record<string, WidgetExpose>>({})
+const pointClicks = ref<Point[]>([])
+
 const showClearAllConfirm = ref(false)
 const gridWrapperRef = ref<HTMLElement>()
 const GRID_COLS = 16
@@ -117,6 +135,13 @@ function mouseToGridPosition(event: MouseEvent, size: GridSize = { w: 1, h: 1 })
   }
 }
 
+function handlePointClick(event: Point) {
+  for(const point of pointClicks.value) {
+    if(point.values.x == event.values.x) return;
+  }
+  pointClicks.value.push(event);
+}
+
 function handleGridContextMenu(event: MouseEvent) {
   const target = event.target as HTMLElement
   if (target.closest('.vue-grid-item')) {
@@ -161,6 +186,9 @@ function handleGridContextMenu(event: MouseEvent) {
         v-model:layout="widgetStore.widgets"
         :col-num="GRID_COLS"
         :row-height="GRID_ROW_HEIGHT"
+        :resize-option="{
+          edges: { right: true, bottom: true },
+        }"
         :is-draggable="true"
         :is-resizable="true"
         :is-bounded="false"
@@ -181,11 +209,13 @@ function handleGridContextMenu(event: MouseEvent) {
           drag-allow-from=".base-widget__header"
           drag-ignore-from=".base-widget__content"
         >
+          <PointData :point-datas="pointClicks"> </PointData>
           <component
             :is="componentMap[(item as Widget).type] || BaseWidget"
             :ref="(el: WidgetExpose | null) => setWidgetRef(String(item.i), el)"
             :widget-id="item.i"
             :data-widget-id="item.i"
+            @point-click="handlePointClick"
           />
         </GridItem>
       </GridLayout>
